@@ -2,6 +2,11 @@
 #
 .DS_Store
 
+# LifeHub — Environment variables (contains API keys — DO NOT COMMIT)
+.env
+# Commit .env.example instead (safe template without real keys)
+
+
 # Xcode
 #
 build/

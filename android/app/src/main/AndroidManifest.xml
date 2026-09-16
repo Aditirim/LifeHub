@@ -1,6 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      ══════════════════════════════════════════════════════
+      PERMISSIONS
+      ══════════════════════════════════════════════════════
+    -->
+
+    <!-- Network access (required for Firebase, Weather API) -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Location permissions — used by WeatherScreen.
+      ACCESS_FINE_LOCATION: GPS-level accuracy.
+      ACCESS_COARSE_LOCATION: Network-based location (fallback).
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!--
+      POST_NOTIFICATIONS — Required on Android 13+ (API 33+) to show notifications.
+      Without this, no notifications appear on newer devices.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Vibrate for notification alerts -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+      RECEIVE_BOOT_COMPLETED — Allows us to reschedule alarms after the device restarts.
+      Without this, all alarms are lost when the phone reboots.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      SCHEDULE_EXACT_ALARM — Required on Android 12+ (API 31+) to schedule exact alarms.
+      We use setAlarmClock() which is the recommended approach for alarm-clock apps.
+      The user must grant this in Settings → Special app access → Alarms & reminders.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+      USE_FULL_SCREEN_INTENT — Required on Android 14+ (API 34+) to show full-screen
+      alarm activities over the lock screen.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Wake lock — allows the alarm service to keep the CPU awake during playback -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+      FOREGROUND_SERVICE — Required to start AlarmService as a foreground service.
+      FOREGROUND_SERVICE_MEDIA_PLAYBACK — Declares the foreground service type.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!--
+      READ_MEDIA_AUDIO / READ_EXTERNAL_STORAGE — for reading user-selected audio files.
+      READ_MEDIA_AUDIO is the correct permission on Android 13+.
+      READ_EXTERNAL_STORAGE is for API 32 and below.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
       android:name=".MainApplication"
@@ -11,6 +74,7 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
@@ -23,5 +87,97 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!--
+        AlarmActivity — full-screen alarm UI shown over the lock screen.
+        showOnLockScreen: legacy flag for API < 27.
+        turnScreenOn: legacy flag for API < 27.
+        showWhenLocked is handled programmatically in AlarmActivity.kt.
+        exported=false: only started by our own code.
+      -->
+      <activity
+        android:name=".alarm.AlarmActivity"
+        android:exported="false"
+        android:excludeFromRecents="true"
+        android:showOnLockScreen="true"
+        android:turnScreenOn="true"
+        android:taskAffinity="${applicationId}.alarm"
+        android:launchMode="singleInstance" />
+
+      <!--
+        AlarmService — foreground service for ringtone playback.
+        foregroundServiceType="mediaPlayback" declares the service type on Android 10+.
+      -->
+      <service
+        android:name=".alarm.AlarmService"
+        android:exported="false"
+        android:foregroundServiceType="mediaPlayback" />
+
+      <!--
+        AlarmReceiver — BroadcastReceiver for AlarmManager exact alarms.
+        exported=false: only triggered by the system AlarmManager via our own PendingIntents.
+      -->
+      <receiver
+        android:name=".alarm.AlarmReceiver"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="com.lifehub.ALARM_FIRE" />
+        </intent-filter>
+      </receiver>
+
+      <!--
+        TimerReceiver — BroadcastReceiver for timer completion.
+      -->
+      <receiver
+        android:name=".alarm.TimerReceiver"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="com.lifehub.TIMER_FIRE" />
+        </intent-filter>
+      </receiver>
+
+      <!--
+        BootReceiver — reschedules alarms after device reboot.
+        exported=true IS required for BOOT_COMPLETED receivers on Android 12+.
+        The RECEIVE_BOOT_COMPLETED permission limits who can trigger this.
+      -->
+      <receiver
+        android:name=".alarm.BootReceiver"
+        android:exported="true"
+        android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+        <intent-filter>
+          <action android:name="android.intent.action.BOOT_COMPLETED" />
+          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+          <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+        </intent-filter>
+      </receiver>
+
+      <!--
+        Firebase Cloud Messaging Service.
+        Handles FCM push notifications in both foreground and background.
+        @react-native-firebase/messaging registers this automatically via autolinking.
+      -->
+      <service
+        android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="com.google.firebase.MESSAGING_EVENT" />
+        </intent-filter>
+      </service>
+
+      <!--
+        Notifee Boot Receiver.
+        Reschedules Notifee trigger notifications (habit reminders, etc.) after reboot.
+        This does NOT handle alarm scheduling (our AlarmReceiver does that).
+      -->
+      <receiver
+        android:name="app.notifee.core.BootReceiver"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.intent.action.BOOT_COMPLETED" />
+          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+        </intent-filter>
+      </receiver>
+
     </application>
 </manifest>
