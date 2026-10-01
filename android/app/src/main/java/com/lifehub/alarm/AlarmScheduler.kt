@@ -93,7 +93,9 @@ object AlarmScheduler {
 
     /**
      * Schedule a one-shot timer notification after [durationMs] milliseconds.
-     * Uses setExactAndAllowWhileIdle because timers are not alarm-clock events.
+     * Uses setAlarmClock() (same as alarms) for Doze-exempt exact delivery.
+     * setExactAndAllowWhileIdle() can be batched/delayed up to 75% in Doze;
+     * setAlarmClock() is always exempt and shows the alarm icon in the status bar.
      */
     @SuppressLint("MissingPermission")
     fun scheduleTimer(context: Context, timerId: String, label: String, durationMs: Long) {
@@ -106,28 +108,31 @@ object AlarmScheduler {
             putExtra(EXTRA_TIMER_LABEL, label)
             `package` = context.packageName
         }
+        // Use a large offset (1_000_000) to avoid hashCode collision with alarm request codes
+        val requestCode = 1_000_000 + (timerId.hashCode() and 0x7FFFF)
         val pending = PendingIntent.getBroadcast(
             context,
-            timerId.hashCode(),
+            requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pending)
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerMs, pending)
-        }
+        // setAlarmClock fires reliably even in Doze mode (Android's Doze whitelist)
+        val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, pending)
+        alarmManager.setAlarmClock(clockInfo, pending)
+        Log.d(TAG, "Timer $timerId '$label' scheduled for $triggerMs")
     }
 
     fun cancelTimer(context: Context, timerId: String) {
+        Log.d(TAG, "Cancelling timer $timerId")
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, TimerReceiver::class.java).apply {
             action = ACTION_TIMER_FIRE
             `package` = context.packageName
         }
+        val requestCode = 1_000_000 + (timerId.hashCode() and 0x7FFFF)
         val pending = PendingIntent.getBroadcast(
             context,
-            timerId.hashCode(),
+            requestCode,
             intent,
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
         )

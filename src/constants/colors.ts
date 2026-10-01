@@ -1,167 +1,176 @@
 /**
  * Design System - Color Tokens
  *
- * All colors used throughout LifeHub are defined here.
- * We support both DARK (default) and LIGHT themes.
- * Using purple/indigo as primary color for a premium feel.
+ * Palette inspired by old-growth forests and botanical notebooks.
+ *   #EDF4F2  — sage mist   (lightest, backgrounds & surfaces)
+ *   #7C8363  — lichen      (mid-tone, icons & secondary text)
+ *   #31473A  — deep canopy (darkest, primary actions & headers)
+ *
+ * Both themes stay entirely within this family; dark mode uses
+ * deep soil tones, light mode uses parchment & sage.
  */
 
 // ─── Gradient Color Arrays ──────────────────────────────────────────────────
-// These are used with react-native-linear-gradient
 export const GRADIENTS = {
-  primary:   ['#7C3AED', '#5B21B6'] as string[],  // violet
-  blue:      ['#2563EB', '#1D4ED8'] as string[],  // blue
-  teal:      ['#0D9488', '#0F766E'] as string[],  // teal
-  amber:     ['#D97706', '#B45309'] as string[],  // amber
-  rose:      ['#E11D48', '#BE123C'] as string[],  // rose
-  green:     ['#059669', '#047857'] as string[],  // green
-  dark:      ['#1A1A2E', '#0D0D1A'] as string[],  // dark bg gradient
-  darkCard:  ['#1E1E3F', '#16213E'] as string[],  // dark card gradient
-  lightCard: ['#F0F0FF', '#FFFFFF'] as string[],  // light card gradient
+  // Core brand
+  primary: ['#31473A', '#1E2D24'] as string[],  // deep forest → near-black
+  secondary: ['#7C8363', '#5A6148'] as string[],  // lichen → dark olive
+
+  // Module cards — each still distinct but harmonious with the palette
+  blue: ['#3D6B6B', '#2B4F4F'] as string[],  // slate teal
+  teal: ['#4A7C6F', '#2E5446'] as string[],  // sage teal
+  amber: ['#7A6040', '#5A4530'] as string[],  // warm earth
+  rose: ['#7A4A50', '#5A3038'] as string[],  // muted rose-earth
+  green: ['#31473A', '#243528'] as string[],  // deep canopy
+  dark: ['#1E2D24', '#111A15'] as string[],  // dark bg gradient
+  darkCard: ['#243528', '#1A2820'] as string[],  // dark card gradient
+  lightCard: ['#EDF4F2', '#D8EDE8'] as string[],  // light card gradient
 };
 
 // ─── Theme Types ─────────────────────────────────────────────────────────────
 export interface ColorTheme {
   // Backgrounds
-  background:    string;
-  surface:       string;
-  card:          string;
-  cardElevated:  string;
+  background: string;
+  surface: string;
+  card: string;
+  cardElevated: string;
 
   // Brand
-  primary:       string;
-  primaryLight:  string;
-  primaryDark:   string;
-  accent:        string;
+  primary: string;
+  primaryLight: string;
+  primaryDark: string;
+  accent: string;
 
   // Semantic
-  success:       string;
-  error:         string;
-  warning:       string;
-  info:          string;
+  success: string;
+  error: string;
+  warning: string;
+  info: string;
 
   // Text
-  text:          string;
+  text: string;
   textSecondary: string;
-  textMuted:     string;
+  textMuted: string;
   textOnPrimary: string;
 
   // UI
-  border:        string;
-  divider:       string;
-  overlay:       string;
-  shadow:        string;
+  border: string;
+  divider: string;
+  overlay: string;
+  shadow: string;
 
   // Tab bar
-  tabActive:     string;
-  tabInactive:   string;
+  tabActive: string;
+  tabInactive: string;
   tabBackground: string;
 }
 
 // ─── Dark Theme ──────────────────────────────────────────────────────────────
+// Like standing in an old-growth forest at dusk — deep greens, mossy shadows
 export const DARK_COLORS: ColorTheme = {
-  // Backgrounds — deep navy/indigo for immersive dark UI
-  background:    '#0D0D1A',
-  surface:       '#1A1A2E',
-  card:          '#16213E',
-  cardElevated:  '#1E2A48',
+  // Backgrounds — forest floor, almost black-green
+  background: '#111A15',
+  surface: '#1A2820',
+  card: '#1E3028',
+  cardElevated: '#263D30',
 
-  // Brand — vibrant violet
-  primary:       '#7C3AED',
-  primaryLight:  '#A78BFA',
-  primaryDark:   '#5B21B6',
-  accent:        '#F59E0B',
+  // Brand
+  primary: '#7C8363',   // lichen — warm mid-green, readable on dark
+  primaryLight: '#A8B090',   // lighter lichen for highlights
+  primaryDark: '#31473A',   // deep canopy for pressed states
+  accent: '#C8B87A',   // warm ochre — pops against green
 
-  // Semantic
-  success:       '#10B981',
-  error:         '#EF4444',
-  warning:       '#F97316',
-  info:          '#3B82F6',
+  // Semantic — desaturated to feel earthy, not neon
+  success: '#5A9E72',   // fern green
+  error: '#C26B5C',   // terracotta
+  warning: '#C8993C',   // golden moss
+  info: '#5A8A9E',   // slate blue
 
   // Text
-  text:          '#F9FAFB',
-  textSecondary: '#9CA3AF',
-  textMuted:     '#6B7280',
-  textOnPrimary: '#FFFFFF',
+  text: '#EDF4F2',   // sage mist — the lightest palette colour
+  textSecondary: '#A8B090',   // lighter lichen
+  textMuted: '#6A7A60',   // muted moss
+  textOnPrimary: '#EDF4F2',
 
   // UI
-  border:        '#2D3748',
-  divider:       '#1F2937',
-  overlay:       'rgba(0,0,0,0.7)',
-  shadow:        'rgba(0,0,0,0.5)',
+  border: '#2E4035',
+  divider: '#1E3028',
+  overlay: 'rgba(17,26,21,0.8)',
+  shadow: 'rgba(0,0,0,0.6)',
 
   // Tab bar
-  tabActive:     '#A78BFA',
-  tabInactive:   '#4B5563',
-  tabBackground: '#111127',
+  tabActive: '#A8B090',   // lighter lichen
+  tabInactive: '#4A5A40',   // dark moss
+  tabBackground: '#111A15',   // matches background
 };
 
 // ─── Light Theme ─────────────────────────────────────────────────────────────
+// Like a botanical sketchbook — pale sage, warm parchment, ink-green accents
 export const LIGHT_COLORS: ColorTheme = {
-  // Backgrounds — clean white/lavender
-  background:    '#F8F9FF',
-  surface:       '#FFFFFF',
-  card:          '#FFFFFF',
-  cardElevated:  '#F3F4FF',
+  // Backgrounds — sage mist & near-white
+  background: '#EDF4F2',
+  surface: '#F7FAF9',
+  card: '#FFFFFF',
+  cardElevated: '#D8EDE8',
 
-  // Brand — same violet as dark
-  primary:       '#7C3AED',
-  primaryLight:  '#A78BFA',
-  primaryDark:   '#5B21B6',
-  accent:        '#F59E0B',
+  // Brand
+  primary: '#31473A',   // deep canopy
+  primaryLight: '#7C8363',   // lichen
+  primaryDark: '#1E2D24',   // near-black forest
+  accent: '#8A6E2A',   // warm amber-earth
 
   // Semantic
-  success:       '#059669',
-  error:         '#DC2626',
-  warning:       '#D97706',
-  info:          '#2563EB',
+  success: '#3A7A58',   // forest green
+  error: '#A84040',   // deep terracotta
+  warning: '#8A6E2A',   // amber-earth
+  info: '#3A6080',   // deep slate
 
   // Text
-  text:          '#1F2937',
-  textSecondary: '#6B7280',
-  textMuted:     '#9CA3AF',
-  textOnPrimary: '#FFFFFF',
+  text: '#1E2D24',   // near-black forest
+  textSecondary: '#4A5A40',   // dark moss
+  textMuted: '#7C8363',   // lichen
+  textOnPrimary: '#EDF4F2',   // sage mist
 
   // UI
-  border:        '#E5E7EB',
-  divider:       '#F3F4F6',
-  overlay:       'rgba(0,0,0,0.5)',
-  shadow:        'rgba(0,0,0,0.1)',
+  border: '#C8DDD8',
+  divider: '#D8EDE8',
+  overlay: 'rgba(30,45,36,0.5)',
+  shadow: 'rgba(49,71,58,0.12)',
 
   // Tab bar
-  tabActive:     '#7C3AED',
-  tabInactive:   '#9CA3AF',
+  tabActive: '#31473A',
+  tabInactive: '#7C8363',
   tabBackground: '#FFFFFF',
 };
 
 // ─── Category Colors ─────────────────────────────────────────────────────────
-// Used for habit colors and money categories
+// Muted, earthy tones that feel hand-curated, not algorithmic
 export const CATEGORY_COLORS = [
-  '#7C3AED', // violet
-  '#2563EB', // blue
-  '#0D9488', // teal
-  '#059669', // green
-  '#D97706', // amber
-  '#E11D48', // rose
-  '#F97316', // orange
-  '#8B5CF6', // purple
-  '#06B6D4', // cyan
-  '#EC4899', // pink
+  '#31473A', // deep canopy
+  '#7C8363', // lichen
+  '#5A8A72', // fern
+  '#3D6B6B', // slate teal
+  '#7A6040', // warm earth
+  '#7A4A50', // muted rose
+  '#5A6890', // slate blue
+  '#9A7A50', // sandstone
+  '#4A7C6F', // sage teal
+  '#6A5A80', // dusty violet
 ];
 
-// Habit color palette (with labels for UI)
+// Habit color palette
 export const HABIT_COLORS = [
-  { color: '#7C3AED', label: 'Violet'  },
-  { color: '#2563EB', label: 'Blue'    },
-  { color: '#0D9488', label: 'Teal'    },
-  { color: '#059669', label: 'Green'   },
-  { color: '#D97706', label: 'Amber'   },
-  { color: '#E11D48', label: 'Rose'    },
-  { color: '#F97316', label: 'Orange'  },
-  { color: '#EC4899', label: 'Pink'    },
+  { color: '#7C8363', label: 'Forest' },
+  { color: '#7C8363', label: 'Lichen' },
+  { color: '#7C8363', label: 'Fern' },
+  { color: '#7C8363', label: 'Slate' },
+  { color: '#7C8363', label: 'Earth' },
+  { color: '#7C8363', label: 'Rosewood' },
+  { color: '#7C8363', label: 'Dusk' },
+  { color: '#9A7A50', label: 'Sand' },
 ];
 
-// Expense categories
+// Expense categories (unchanged — display strings, not colors)
 export const EXPENSE_CATEGORIES = [
   'Food & Dining',
   'Transport',

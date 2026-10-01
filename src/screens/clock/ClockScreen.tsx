@@ -35,10 +35,10 @@ type Nav = NativeStackNavigationProp<MainStackParamList>;
 type ClockTab = 'clock' | 'stopwatch' | 'timer' | 'alarms';
 
 const TAB_ICONS: Record<ClockTab, string> = {
-  clock:     'clock-outline',
+  clock: 'clock-outline',
   stopwatch: 'timer-outline',
-  timer:     'timer-sand',
-  alarms:    'alarm',
+  timer: 'timer-sand',
+  alarms: 'alarm',
 };
 
 const SETTINGS_KEY = '@lifehub_alarm_settings';
@@ -56,7 +56,7 @@ export default function ClockScreen() {
         const s = JSON.parse(raw);
         if (s.use24Hour !== undefined) setUse24Hour(s.use24Hour);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return (
@@ -80,10 +80,10 @@ export default function ClockScreen() {
         ))}
       </View>
 
-      {activeTab === 'clock'     && <ClockTabView     colors={colors} use24Hour={use24Hour} />}
+      {activeTab === 'clock' && <ClockTabView colors={colors} use24Hour={use24Hour} />}
       {activeTab === 'stopwatch' && <StopwatchTabView colors={colors} />}
-      {activeTab === 'timer'     && <TimerTabView     colors={colors} />}
-      {activeTab === 'alarms'    && <AlarmsTabView    colors={colors} use24Hour={use24Hour} />}
+      {activeTab === 'timer' && <TimerTabView colors={colors} />}
+      {activeTab === 'alarms' && <AlarmsTabView colors={colors} use24Hour={use24Hour} />}
     </View>
   );
 }
@@ -187,10 +187,10 @@ function StopwatchTabView({ colors }: { colors: any }) {
             <Text style={[styles.lapHeaderText, { color: colors.textSecondary }]}>Total</Text>
           </View>
           {[...laps].reverse().map((lapTotal, revIdx) => {
-            const i       = laps.length - 1 - revIdx;
-            const delta   = lapDeltas[i];
-            const isFast  = lapDeltas.length > 1 && delta === minDelta;
-            const isSlow  = lapDeltas.length > 1 && delta === maxDelta;
+            const i = laps.length - 1 - revIdx;
+            const delta = lapDeltas[i];
+            const isFast = lapDeltas.length > 1 && delta === minDelta;
+            const isSlow = lapDeltas.length > 1 && delta === maxDelta;
             const rowColor = isFast ? '#10B981' : isSlow ? '#EF4444' : colors.text;
             return (
               <View key={i} style={[styles.lapRow, { borderColor: colors.border }]}>
@@ -211,20 +211,28 @@ function StopwatchTabView({ colors }: { colors: any }) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const TIMER_PRESETS = [
-  { label: '1m',  ms: 60_000 },
-  { label: '3m',  ms: 180_000 },
-  { label: '5m',  ms: 300_000 },
+  { label: '1m', ms: 60_000 },
+  { label: '2m', ms: 120_000 },
+  { label: '3m', ms: 180_000 },
+  { label: '5m', ms: 300_000 },
   { label: '10m', ms: 600_000 },
   { label: '15m', ms: 900_000 },
   { label: '20m', ms: 1_200_000 },
   { label: '25m', ms: 1_500_000 },
   { label: '30m', ms: 1_800_000 },
+  { label: '45m', ms: 2_700_000 },
+  { label: '1h', ms: 3_600_000 },
+  { label: '1h30m', ms: 5_400_000 },
+  { label: '2h', ms: 7_200_000 },
 ];
+
+import { TextInput, KeyboardAvoidingView } from 'react-native';
 
 function TimerTabView({ colors }: { colors: any }) {
   const { status, remaining, totalMs, progress, start, pause, resume, reset } = useTimer();
   const [inputMins, setInputMins] = useState('05');
   const [inputSecs, setInputSecs] = useState('00');
+  const [timerLabel, setTimerLabel] = useState('');
   const progressAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -238,29 +246,52 @@ function TimerTabView({ colors }: { colors: any }) {
   const isIdle = status === 'idle';
   const isDone = status === 'done';
   const isRunning = status === 'running';
-  const isPaused  = status === 'paused';
+  const isPaused = status === 'paused';
 
-  function handleStart() {
-    const mins  = parseInt(inputMins, 10) || 0;
-    const secs  = parseInt(inputSecs, 10) || 0;
-    const total = (mins * 60 + secs) * 1000;
-    if (total === 0) { Alert.alert('Set Duration', 'Please set a timer duration first.'); return; }
-    start(total, `${mins}m ${secs}s timer`);
+  function clampMins(val: string): string {
+    const n = Math.min(99, Math.max(0, parseInt(val, 10) || 0));
+    return String(n).padStart(2, '0');
+  }
+  function clampSecs(val: string): string {
+    const n = Math.min(59, Math.max(0, parseInt(val, 10) || 0));
+    return String(n).padStart(2, '0');
   }
 
-  function handlePreset(ms: number) {
-    start(ms, `${TIMER_PRESETS.find(p => p.ms === ms)?.label ?? ''} timer`);
+  function adjustMins(delta: number) {
+    const n = Math.min(99, Math.max(0, (parseInt(inputMins, 10) || 0) + delta));
+    setInputMins(String(n).padStart(2, '0'));
+  }
+  function adjustSecs(delta: number) {
+    let s = (parseInt(inputSecs, 10) || 0) + delta;
+    let m = parseInt(inputMins, 10) || 0;
+    if (s < 0) { s = 59; m = Math.max(0, m - 1); }
+    if (s >= 60) { s = 0; m = Math.min(99, m + 1); }
+    setInputMins(String(m).padStart(2, '0'));
+    setInputSecs(String(s).padStart(2, '0'));
+  }
+
+  function handleStart() {
+    const mins = parseInt(inputMins, 10) || 0;
+    const secs = parseInt(inputSecs, 10) || 0;
+    const total = (mins * 60 + secs) * 1000;
+    if (total === 0) { Alert.alert('Set Duration', 'Please set a timer duration first.'); return; }
+    const label = timerLabel.trim() || (mins > 0 ? `${mins}m${secs > 0 ? ` ${secs}s` : ''}` : `${secs}s`) + ' timer';
+    start(total, label);
+  }
+
+  function handlePreset(ms: number, label: string) {
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+    setInputMins(String(mins).padStart(2, '0'));
+    setInputSecs(String(secs).padStart(2, '0'));
+    start(ms, `${label} timer`);
   }
 
   const displaySecs = Math.ceil(remaining / 1000);
-  const displayStr  = (isIdle || isDone) ? '00:00' : formatCountdown(displaySecs);
-
-  // Circumference-based progress ring
-  const RING_R = 110;
-  const CIRC   = 2 * Math.PI * RING_R;
+  const displayStr = (isIdle || isDone) ? '00:00' : formatCountdown(displaySecs);
 
   return (
-    <ScrollView contentContainerStyle={[styles.centered, { paddingBottom: 24 }]}>
+    <ScrollView contentContainerStyle={[styles.centered, { paddingBottom: 24 }]} keyboardShouldPersistTaps="handled">
       {/* Timer ring */}
       <View style={styles.timerRingContainer}>
         <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.timerCircle}>
@@ -278,35 +309,83 @@ function TimerTabView({ colors }: { colors: any }) {
         </LinearGradient>
       </View>
 
-      {/* Preset buttons — only shown when idle */}
+      {/* Preset buttons — always shown when idle */}
       {isIdle && (
         <>
+          <Text style={[styles.timerSectionLabel, { color: colors.textSecondary }]}>Quick Start</Text>
           <View style={styles.presetRow}>
             {TIMER_PRESETS.map(p => (
               <TouchableOpacity
                 key={p.ms}
-                onPress={() => handlePreset(p.ms)}
+                onPress={() => handlePreset(p.ms, p.label)}
                 style={[styles.presetBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.presetLabel, { color: colors.primary }]}>{p.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Custom input */}
+          {/* Custom duration input with steppers */}
+          <Text style={[styles.timerSectionLabel, { color: colors.textSecondary }]}>Custom Duration</Text>
           <View style={styles.timerInputRow}>
-            <View style={[styles.timerInputBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text
-                style={[styles.timerInputNum, { color: colors.text }]}
-                onPress={() => {}}>
-                {inputMins}
-              </Text>
-              <Text style={[styles.timerUnit, { color: colors.textSecondary }]}>min</Text>
+            {/* Minutes */}
+            <View style={styles.timerSpinner}>
+              <TouchableOpacity onPress={() => adjustMins(1)} style={styles.spinnerBtn}>
+                <Icon name="chevron-up" size={20} color={colors.primary} />
+              </TouchableOpacity>
+              <View style={[styles.timerInputBox, { backgroundColor: colors.card, borderColor: colors.primary + '66' }]}>
+                <TextInput
+                  style={[styles.timerInputNum, { color: colors.text }]}
+                  value={inputMins}
+                  onChangeText={v => setInputMins(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  onBlur={() => setInputMins(clampMins(inputMins))}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  selectTextOnFocus
+                />
+                <Text style={[styles.timerUnit, { color: colors.textSecondary }]}>min</Text>
+              </View>
+              <TouchableOpacity onPress={() => adjustMins(-1)} style={styles.spinnerBtn}>
+                <Icon name="chevron-down" size={20} color={colors.primary} />
+              </TouchableOpacity>
             </View>
+
             <Text style={[styles.timerColon, { color: colors.text }]}>:</Text>
-            <View style={[styles.timerInputBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.timerInputNum, { color: colors.text }]}>{inputSecs}</Text>
-              <Text style={[styles.timerUnit, { color: colors.textSecondary }]}>sec</Text>
+
+            {/* Seconds */}
+            <View style={styles.timerSpinner}>
+              <TouchableOpacity onPress={() => adjustSecs(1)} style={styles.spinnerBtn}>
+                <Icon name="chevron-up" size={20} color={colors.primary} />
+              </TouchableOpacity>
+              <View style={[styles.timerInputBox, { backgroundColor: colors.card, borderColor: colors.primary + '66' }]}>
+                <TextInput
+                  style={[styles.timerInputNum, { color: colors.text }]}
+                  value={inputSecs}
+                  onChangeText={v => setInputSecs(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  onBlur={() => setInputSecs(clampSecs(inputSecs))}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  selectTextOnFocus
+                />
+                <Text style={[styles.timerUnit, { color: colors.textSecondary }]}>sec</Text>
+              </View>
+              <TouchableOpacity onPress={() => adjustSecs(-1)} style={styles.spinnerBtn}>
+                <Icon name="chevron-down" size={20} color={colors.primary} />
+              </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Optional label */}
+          <View style={[styles.timerLabelInput, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Icon name="label-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+            <TextInput
+              style={[styles.timerLabelText, { color: colors.text }]}
+              placeholder="Timer label (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={timerLabel}
+              onChangeText={setTimerLabel}
+              maxLength={40}
+              returnKeyType="done"
+            />
           </View>
         </>
       )}
@@ -322,7 +401,7 @@ function TimerTabView({ colors }: { colors: any }) {
         )}
 
         <TouchableOpacity
-          onPress={isRunning ? pause : isPaused ? resume : handleStart}
+          onPress={isRunning ? pause : isPaused ? resume : isDone ? reset : handleStart}
           style={[styles.mainBtn, { backgroundColor: isRunning ? '#EF4444' : colors.primary }]}>
           <Icon
             name={isRunning ? 'pause' : isDone ? 'refresh' : 'play'}
@@ -333,9 +412,22 @@ function TimerTabView({ colors }: { colors: any }) {
 
         {!isIdle && <View style={[styles.roundBtn, { borderColor: 'transparent' }]} />}
       </View>
+
+      {/* Running: show label */}
+      {(isRunning || isPaused) && (
+        <Text style={{ color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginTop: -SPACING[4] }}>
+          {isPaused ? '⏸ Paused' : '▶ Running'}
+        </Text>
+      )}
     </ScrollView>
   );
 }
+
+function useTimerLabel(_status: string) {
+  // Thin helper — just prevents hook rules violation
+  return '';
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ALARMS TAB
@@ -345,7 +437,7 @@ function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean 
   const nav = useNavigation<Nav>();
   const { alarms, loading, toggleAlarm, removeAlarm, loadAll } = useAlarms();
   const [deleteTarget, setDeleteTarget] = useState<Alarm | null>(null);
-  const [confirmVis,   setConfirmVis]   = useState(false);
+  const [confirmVis, setConfirmVis] = useState(false);
 
   // Refresh when screen focuses (after edit/create)
   useEffect(() => {
@@ -370,7 +462,7 @@ function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean 
     if (!alarm.nextFireTimestamp) return '';
     const diff = alarm.nextFireTimestamp - Date.now();
     if (diff < 0) return '';
-    const hrs  = Math.floor(diff / 3_600_000);
+    const hrs = Math.floor(diff / 3_600_000);
     const mins = Math.floor((diff % 3_600_000) / 60_000);
     if (hrs === 0) return `in ${mins}m`;
     return `in ${hrs}h ${mins}m`;
@@ -507,7 +599,7 @@ const styles = StyleSheet.create({
 
   // Shared
   fullCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  centered:   { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING[4] },
+  centered: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING[4] },
 
   // Clock
   digitalClock: {
@@ -560,8 +652,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', minWidth: 80,
   },
   timerInputNum: { fontSize: FONT_SIZE['3xl'], fontWeight: '700', textAlign: 'center' },
-  timerUnit:     { fontSize: FONT_SIZE.sm, marginTop: 2 },
-  timerColon:    { fontSize: FONT_SIZE['3xl'], fontWeight: '700' },
+  timerUnit: { fontSize: FONT_SIZE.sm, marginTop: 2 },
+  timerColon: { fontSize: FONT_SIZE['3xl'], fontWeight: '700' },
 
   // Controls
   controlRow: {
@@ -578,6 +670,26 @@ const styles = StyleSheet.create({
   },
   roundBtnText: { fontSize: FONT_SIZE.sm, fontWeight: '600' },
 
+  // Timer section labels and spinners (MISSING — caused runtime error)
+  timerSectionLabel: {
+    fontSize: FONT_SIZE.sm, fontWeight: '600', letterSpacing: 0.5,
+    marginBottom: SPACING[2], alignSelf: 'flex-start', paddingHorizontal: SPACING[4],
+  },
+  timerSpinner: {
+    alignItems: 'center', gap: 2,
+  },
+  spinnerBtn: {
+    padding: SPACING[2],
+  },
+  // Timer label input (MISSING — caused undefined style reference)
+  timerLabelInput: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: RADIUS.md, borderWidth: 1,
+    paddingHorizontal: SPACING[4], paddingVertical: SPACING[3],
+    marginBottom: SPACING[4], width: '100%',
+  },
+  timerLabelText: { flex: 1, fontSize: FONT_SIZE.base },
+
   // Lap rows
   lapHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -591,7 +703,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[4],
   },
   lapLabel: { fontSize: FONT_SIZE.base, flex: 1 },
-  lapTime:  { fontSize: FONT_SIZE.base, fontWeight: '600', fontVariant: ['tabular-nums'], flex: 1, textAlign: 'center' },
+  lapTime: { fontSize: FONT_SIZE.base, fontWeight: '600', fontVariant: ['tabular-nums'], flex: 1, textAlign: 'center' },
 
   // Alarms
   alarmsHeader: {

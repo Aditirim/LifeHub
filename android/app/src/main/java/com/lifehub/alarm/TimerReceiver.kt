@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -54,12 +56,20 @@ class TimerReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // On Android 8+ (API 26+), sound is controlled by the CHANNEL, not by
+        // NotificationCompat.Builder.setSound() / setDefaults(). Setting both
+        // causes conflicts and the sound may not play.
+        // We configure the channel with the alarm URI in createTimerChannel().
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("⏱️ Timer Done!")
+            .setContentTitle("\u23f1\ufe0f Timer Done!")
             .setContentText(label)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // Do NOT call setDefaults(DEFAULT_SOUND) or setSound() here — on Android 8+
+            // the CHANNEL controls the sound; setting it on the builder overrides and
+            // conflicts, often resulting in silence.
             .setContentIntent(tapPending)
             .setAutoCancel(true)
             .build()
@@ -69,18 +79,20 @@ class TimerReceiver : BroadcastReceiver() {
 
     private fun vibrate(context: Context) {
         try {
+            // Pattern: immediate 400ms vibrate, 200ms pause, 400ms vibrate — no repeat
+            val pattern = longArrayOf(0, 400, 200, 400)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
                 val v  = vm.defaultVibrator
-                v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 400, 200, 400, 200, 400), -1))
+                v.vibrate(VibrationEffect.createWaveform(pattern, -1))
             } else {
                 @Suppress("DEPRECATION")
                 val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 400, 200, 400), -1))
+                    v.vibrate(VibrationEffect.createWaveform(pattern, -1))
                 } else {
                     @Suppress("DEPRECATION")
-                    v.vibrate(longArrayOf(0, 400, 200, 400), -1)
+                    v.vibrate(pattern, -1)
                 }
             }
         } catch (_: Exception) {}
@@ -90,6 +102,14 @@ class TimerReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+
+        // Configure the channel with an alarm-type sound so the timer chime is audible.
+        val alarmSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val audioAttrs = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Timer",
@@ -97,6 +117,8 @@ class TimerReceiver : BroadcastReceiver() {
         ).apply {
             description = "Timer completion notifications"
             enableVibration(true)
+            setSound(alarmSoundUri, audioAttrs)
+            setBypassDnd(true)
         }
         nm.createNotificationChannel(channel)
     }

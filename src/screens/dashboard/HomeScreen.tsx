@@ -21,7 +21,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { format } from 'date-fns';
 import {
-  query, where, orderBy, onSnapshot,
+  query, where, onSnapshot,
 } from '@react-native-firebase/firestore';
 
 import { useAuth } from '../../context/AuthContext';
@@ -40,57 +40,53 @@ import { fetchCurrentWeather, CurrentWeather, getWeatherIconName } from '../../s
 type NavProp = NativeStackNavigationProp<MainStackParamList>;
 
 interface Module {
-  key:    string;
-  label:  string;
-  icon:   string;
+  key: string;
+  label: string;
+  icon: string;
   gradient: string[];
-  nav?:   keyof MainStackParamList;
-  tab?:   string;
+  nav?: keyof MainStackParamList;
+  tab?: string;
 }
 
 const MODULES: Module[] = [
-  { key: 'weather',  label: 'Weather',   icon: 'weather-partly-cloudy', gradient: GRADIENTS.blue,    nav: 'Weather' },
-  { key: 'notes',    label: 'Notes',     icon: 'note-text-outline',     gradient: GRADIENTS.amber,   nav: 'Notes'   },
-  { key: 'clock',    label: 'Clock',     icon: 'alarm',                 gradient: GRADIENTS.teal,    nav: 'Clock'   },
-  { key: 'calendar', label: 'Calendar',  icon: 'calendar-month-outline', gradient: GRADIENTS.rose,  tab: 'Calendar' },
-  { key: 'habits',   label: 'Habits',    icon: 'check-circle-outline',  gradient: GRADIENTS.green,   tab: 'Habits'  },
-  { key: 'money',    label: 'Money',     icon: 'wallet-outline',        gradient: GRADIENTS.primary, tab: 'Money'   },
+  { key: 'weather', label: 'Weather', icon: 'weather-partly-cloudy', gradient: GRADIENTS.blue, nav: 'Weather' },
+  { key: 'notes', label: 'Notes', icon: 'note-text-outline', gradient: GRADIENTS.amber, nav: 'Notes' },
+  { key: 'clock', label: 'Clock', icon: 'alarm', gradient: GRADIENTS.teal, nav: 'Clock' },
+  { key: 'calendar', label: 'Calendar', icon: 'calendar-month-outline', gradient: GRADIENTS.rose, tab: 'Calendar' },
+  { key: 'habits', label: 'Habits', icon: 'check-circle-outline', gradient: GRADIENTS.green, tab: 'Habits' },
+  { key: 'money', label: 'Money', icon: 'wallet-outline', gradient: GRADIENTS.primary, tab: 'Money' },
 ];
 
 export default function HomeScreen() {
-  const navigation  = useNavigation<NavProp>();
-  const { user }    = useAuth();
-  const { colors }  = useTheme();
+  const navigation = useNavigation<NavProp>();
+  const { user } = useAuth();
+  const { colors, isDark } = useTheme();
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
-  const [weather,       setWeather]       = useState<CurrentWeather | null>(null);
-  const [weatherError,  setWeatherError]  = useState('');
-  const [todayEvents,   setTodayEvents]   = useState<any[]>([]);
-  const [habits,        setHabits]        = useState<any[]>([]);
+  const [weather, setWeather] = useState<CurrentWeather | null>(null);
+  const [weatherError, setWeatherError] = useState('');
+  const [todayEvents, setTodayEvents] = useState<any[]>([]);
+  const [habits, setHabits] = useState<any[]>([]);
   const [todayExpenses, setTodayExpenses] = useState(0);
-  const [refreshing,    setRefreshing]    = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const uid   = user?.uid ?? '';
+  const uid = user?.uid ?? '';
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  // ── Clock ─────────────────────────────────────────────────────────────────
-
+  // Clock
   useEffect(() => {
     timerRef.current = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timerRef.current);
   }, []);
 
-  // ── Weather ───────────────────────────────────────────────────────────────
-
+  // Weather
   function loadWeather() {
     Geolocation.getCurrentPosition(
       async pos => {
         try {
-          const data = await fetchCurrentWeather(
-            pos.coords.latitude, pos.coords.longitude,
-          );
+          const data = await fetchCurrentWeather(pos.coords.latitude, pos.coords.longitude);
           setWeather(data);
           setWeatherError('');
         } catch (e: any) {
@@ -104,32 +100,28 @@ export default function HomeScreen() {
 
   useEffect(() => { loadWeather(); }, []);
 
-  // ── Firestore listeners (modular API) ────────────────────────────────────
-
+  // Firestore listeners
   useEffect(() => {
     if (!uid) return;
 
-    // Today's events
     const eventsRef = eventsCollection(uid);
-    const eventsQ   = query(eventsRef, where('date', '==', today));
+    const eventsQ = query(eventsRef, where('date', '==', today));
     const unsubEvents = onSnapshot(eventsQ, snap => {
       setTodayEvents(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     }, () => setTodayEvents([]));
 
-    // All habits (to calculate today's completion ratio)
     const habitsRef = habitsCollection(uid);
     const unsubHabits = onSnapshot(habitsRef, snap => {
       setHabits(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     }, () => setHabits([]));
 
-    // Today's expenses — sum from all transactions
     const txRef = transactionsCollection(uid);
-    const txQ   = query(txRef, where('type', '==', 'expense'));
+    const txQ = query(txRef, where('type', '==', 'expense'));
     const unsubTx = onSnapshot(txQ, snap => {
       const total = snap.docs
         .filter((d: any) => {
           const txDate = d.data().date;
-          const txDay  = txDate?.toDate
+          const txDay = txDate?.toDate
             ? format(txDate.toDate(), 'yyyy-MM-dd')
             : (txDate?.split?.('T')?.[0] ?? '');
           return txDay === today;
@@ -138,141 +130,260 @@ export default function HomeScreen() {
       setTodayExpenses(total);
     }, () => setTodayExpenses(0));
 
-    return () => {
-      unsubEvents();
-      unsubHabits();
-      unsubTx();
-    };
+    return () => { unsubEvents(); unsubHabits(); unsubTx(); };
   }, [uid, today]);
 
-  // ── Pull-to-refresh ───────────────────────────────────────────────────────
-
+  // Pull-to-refresh
   function onRefresh() {
     setRefreshing(true);
     loadWeather();
     setTimeout(() => setRefreshing(false), 1500);
   }
 
-  // ── Derived values ────────────────────────────────────────────────────────
-
+  // Derived
   const habitsCompletedToday = habits.filter(h =>
     Array.isArray(h.completedDates) && h.completedDates.includes(today),
   ).length;
+  const habitProgress = habits.length > 0 ? habitsCompletedToday / habits.length : 0;
 
   function navigateToModule(mod: Module) {
     if (mod.nav) { navigation.push(mod.nav as any); }
     else if (mod.tab) { (navigation as any).navigate('MainTabs', { screen: mod.tab }); }
   }
 
+  const headerGradient: string[] = isDark
+    ? ['#111A15', '#1E3028', '#263D30']
+    : ['#31473A', '#3D5A46', '#243528'];
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* @ts-ignore: translucent is a valid Android-only StatusBar prop */}
+      <StatusBar barStyle="light-content" translucent />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primaryLight}
+            colors={[colors.primary]}
+          />
+        }>
 
-        {/* ── Header ─────────────────────────────────────────────────── */}
-        <LinearGradient colors={['#16213E', '#1A1A2E', '#0D0D1A']} style={styles.header}>
+        {/* Header */}
+        <LinearGradient
+          colors={headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}>
+
           <View style={styles.greetRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.greeting}>
                 {getGreeting()}, {user?.displayName?.split(' ')[0] ?? 'there'} 👋
               </Text>
               <Text style={styles.dateText}>{format(currentTime, 'EEEE, MMMM d')}</Text>
             </View>
-            <View style={[styles.clockBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+            <View style={styles.clockBadge}>
               <Text style={styles.clockText}>{format(currentTime, 'HH:mm')}</Text>
+              <Text style={styles.clockSeconds}>:{format(currentTime, 'ss')}</Text>
             </View>
           </View>
 
-          {/* Weather card */}
           {weather ? (
             <TouchableOpacity onPress={() => navigation.push('Weather')} activeOpacity={0.85}>
-              <LinearGradient
-                colors={GRADIENTS.blue}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.weatherCard}>
-                <View>
-                  <Text style={styles.weatherTemp}>{weather.temperature}°C</Text>
-                  <Text style={styles.weatherCity}>{weather.city}, {weather.country}</Text>
-                  <Text style={styles.weatherDesc}>{weather.description}</Text>
+              <View style={styles.weatherCard}>
+                <View style={styles.weatherCardInner}>
+                  <View style={styles.weatherLeft}>
+                    <Text style={styles.weatherTemp}>{weather.temperature}°</Text>
+                    <Text style={styles.weatherCity}>{weather.city}, {weather.country}</Text>
+                    <Text style={styles.weatherDesc}>{weather.description}</Text>
+                  </View>
+                  <View style={styles.weatherRight}>
+                    <Icon name={getWeatherIconName(weather.icon)} size={56} color="rgba(255,255,255,0.92)" />
+                    <View style={styles.weatherMetaRow}>
+                      <Text style={styles.weatherMeta}>💧 {weather.humidity}%</Text>
+                      <Text style={[styles.weatherMeta, { marginLeft: SPACING[3] }]}>
+                        💨 {weather.windSpeed} km/h
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.weatherRight}>
-                  <Icon name={getWeatherIconName(weather.icon)} size={52} color="#FFFFFF" />
-                  <Text style={styles.weatherMeta}>💧{weather.humidity}% 💨{weather.windSpeed}km/h</Text>
+                <View style={styles.weatherTapRow}>
+                  <Text style={styles.weatherTapText}>Tap for full forecast</Text>
+                  <Icon name="chevron-right" size={14} color="rgba(255,255,255,0.5)" />
                 </View>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           ) : (
-            <View style={[styles.weatherError, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-              <Icon name={weatherError ? 'weather-cloudy-alert' : 'loading'} size={22} color="rgba(255,255,255,0.5)" />
-              <Text style={styles.weatherErrorText}>
-                {weatherError || 'Fetching weather...'}
-              </Text>
+            <View style={styles.weatherSkeleton}>
+              <Icon
+                name={weatherError ? 'weather-cloudy-alert' : 'cloud-sync-outline'}
+                size={24}
+                color="rgba(255,255,255,0.45)"
+              />
+              <Text style={styles.weatherErrorText}>{weatherError || 'Fetching weather…'}</Text>
             </View>
           )}
         </LinearGradient>
 
-        {/* ── Stats row ─────────────────────────────────────────────── */}
+        {/* Stats Row */}
         <View style={styles.statsRow}>
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Calendar' })}>
-            <Icon name="calendar-today" size={22} color={colors.primary} />
+            style={[styles.statCard, { backgroundColor: colors.card }]}
+            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Calendar' })}
+            activeOpacity={0.8}>
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#1E2B4A' : '#EEF2FF' }]}>
+              <Icon name="calendar-today" size={20} color="#6366F1" />
+            </View>
             <Text style={[styles.statNumber, { color: colors.text }]}>{todayEvents.length}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Events</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Habits' })}>
-            <Icon name="check-circle-outline" size={22} color={colors.success} />
-            <Text style={[styles.statNumber, { color: colors.text }]}>
-              {habitsCompletedToday}/{habits.length}
-            </Text>
+            style={[styles.statCard, { backgroundColor: colors.card }]}
+            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Habits' })}
+            activeOpacity={0.8}>
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#0E2B1E' : '#ECFDF5' }]}>
+              <Icon name="check-circle-outline" size={20} color="#10B981" />
+            </View>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{habitsCompletedToday}/{habits.length}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Habits</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Money' })}>
-            <Icon name="cash-minus" size={22} color={colors.error} />
-            <Text style={[styles.statNumber, { color: colors.text }]}>
-              {formatCurrency(todayExpenses)}
-            </Text>
+            style={[styles.statCard, { backgroundColor: colors.card }]}
+            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Money' })}
+            activeOpacity={0.8}>
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#2A1020' : '#FFF1F2' }]}>
+              <Icon name="cash-minus" size={20} color="#F43F5E" />
+            </View>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{formatCurrency(todayExpenses)}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Spent</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Today's Events ─────────────────────────────────────────── */}
+        {/* Today's Events */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Events</Text>
-            <TouchableOpacity onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Calendar' })}>
-              <Text style={[styles.seeAll, { color: colors.primaryLight }]}>See all</Text>
+            <TouchableOpacity
+              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Calendar' })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.seeAll, { color: colors.primaryLight }]}>See all →</Text>
             </TouchableOpacity>
           </View>
           {todayEvents.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Icon name="calendar-check-outline" size={28} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No events today</Text>
+            <View style={[styles.emptyCard, { backgroundColor: colors.card }]}>
+              <Icon name="calendar-check-outline" size={32} color={colors.textMuted} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No events today</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>Enjoy your free day!</Text>
+              </View>
             </View>
           ) : (
-            todayEvents.slice(0, 3).map(event => (
-              <View key={event.id} style={[styles.eventItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={[styles.eventDot, { backgroundColor: colors.primary }]} />
-                <View>
-                  <Text style={[styles.eventTitle, { color: colors.text }]}>{event.title}</Text>
+            todayEvents.slice(0, 3).map((event) => (
+              <View key={event.id} style={[styles.eventItem, { backgroundColor: colors.card }]}>
+                <View style={[styles.eventAccent, { backgroundColor: colors.primary }]} />
+                <View style={{ flex: 1, marginLeft: SPACING[3] }}>
+                  <Text style={[styles.eventTitle, { color: colors.text }]} numberOfLines={1}>
+                    {event.title}
+                  </Text>
                   {event.startTime ? (
                     <Text style={[styles.eventTime, { color: colors.textSecondary }]}>{event.startTime}</Text>
                   ) : null}
                 </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </View>
             ))
           )}
         </View>
 
-        {/* ── Quick Access Grid ──────────────────────────────────────── */}
+        {/* Habit Progress */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Habit Progress</Text>
+            <TouchableOpacity
+              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Habits' })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.seeAll, { color: colors.primaryLight }]}>See all →</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.habitCard, { backgroundColor: colors.card }]}>
+            <View style={styles.habitCardTop}>
+              <View>
+                <Text style={[styles.habitCount, { color: colors.text }]}>
+                  {habitsCompletedToday}
+                  <Text style={[styles.habitTotal, { color: colors.textSecondary }]}>/{habits.length}</Text>
+                </Text>
+                <Text style={[styles.habitSubtitle, { color: colors.textSecondary }]}>habits completed today</Text>
+              </View>
+              <View style={[
+                styles.habitBadge,
+                { backgroundColor: habitProgress === 1 ? (isDark ? '#1A3325' : '#C8EDD8') : (isDark ? '#263D30' : '#D8EDE8') },
+              ]}>
+                <Text style={[styles.habitBadgeText, { color: habitProgress === 1 ? '#5A9E72' : colors.primary }]}>
+                  {habits.length > 0 ? `${Math.round(habitProgress * 100)}%` : '—'}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.progressTrack, { backgroundColor: isDark ? '#2E4035' : '#C8DDD8' }]}>
+              <LinearGradient
+                colors={GRADIENTS.green}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.progressFill, { width: `${habitProgress * 100}%` }]}
+              />
+            </View>
+            <Text style={[styles.habitEncouragement, { color: colors.textMuted }]}>
+              {habitProgress === 0
+                ? "Let's get started! 💪"
+                : habitProgress < 0.5
+                  ? 'Keep going, you got this! 🔥'
+                  : habitProgress < 1
+                    ? 'Almost there! 🌟'
+                    : 'All done! Amazing work! 🎉'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Today's Spending */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Spending</Text>
+            <TouchableOpacity
+              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Money' })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.seeAll, { color: colors.primaryLight }]}>See all →</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Money' })}>
+            <LinearGradient
+              colors={isDark ? ['#1E3028', '#263D30'] : ['#31473A', '#4A6254']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.expenseCard}>
+              <View style={styles.expenseCardContent}>
+                <View>
+                  <Text style={styles.expenseLabel}>Total Spent Today</Text>
+                  <Text style={styles.expenseAmount}>{formatCurrency(todayExpenses)}</Text>
+                </View>
+                <View style={styles.expenseIconWrap}>
+                  <Icon name="wallet-outline" size={32} color="rgba(255,255,255,0.85)" />
+                </View>
+              </View>
+              <View style={styles.expenseTapRow}>
+                <Text style={styles.expenseTapText}>View transactions</Text>
+                <Icon name="arrow-right" size={14} color="rgba(255,255,255,0.55)" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Access Grid */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Access</Text>
           <View style={styles.moduleGrid}>
@@ -281,13 +392,13 @@ export default function HomeScreen() {
                 key={mod.key}
                 style={styles.moduleCard}
                 onPress={() => navigateToModule(mod)}
-                activeOpacity={0.85}>
+                activeOpacity={0.82}>
                 <LinearGradient
                   colors={mod.gradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.moduleGradient}>
-                  <Icon name={mod.icon} size={30} color="#FFFFFF" />
+                  <Icon name={mod.icon} size={28} color="#FFFFFF" />
                   <Text style={styles.moduleLabel}>{mod.label}</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -295,7 +406,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={{ height: SPACING[8] }} />
+        <View style={{ height: SPACING[10] }} />
       </ScrollView>
     </View>
   );
@@ -303,77 +414,255 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  scrollContent: { paddingBottom: SPACING[4] },
+
+  // Header
   header: {
-    paddingTop:    Platform.OS === 'android' ? 50 : 44,
+    paddingTop: Platform.OS === 'android' ? 52 : 48,
     paddingBottom: SPACING[5],
     paddingHorizontal: SPACING[5],
+    borderBottomLeftRadius: RADIUS['2xl'],
+    borderBottomRightRadius: RADIUS['2xl'],
   },
   greetRow: {
-    flexDirection:  'row',
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems:     'flex-start',
-    marginBottom:   SPACING[4],
+    marginBottom: SPACING[4],
   },
-  greeting:  { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: '#FFFFFF' },
-  dateText:  { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.55)', marginTop: SPACING[1] },
-  clockBadge: { paddingHorizontal: SPACING[3], paddingVertical: SPACING[2], borderRadius: RADIUS.md },
-  clockText:  { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: '#FFFFFF' },
+  greeting: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: FONT_WEIGHT.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  dateText: {
+    fontSize: FONT_SIZE.sm,
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: SPACING[1],
+  },
+  clockBadge: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING[3],
+    paddingVertical: SPACING[2],
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  clockText: {
+    fontSize: FONT_SIZE['2xl'],
+    fontWeight: FONT_WEIGHT.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  clockSeconds: {
+    fontSize: FONT_SIZE.base,
+    fontWeight: FONT_WEIGHT.medium,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 2,
+  },
+
+  // Weather
   weatherCard: {
-    borderRadius:  RADIUS.lg, padding: SPACING[4],
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    overflow: 'hidden',
   },
-  weatherTemp:      { fontSize: FONT_SIZE['4xl'], fontWeight: FONT_WEIGHT.black, color: '#FFFFFF' },
-  weatherCity:      { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.8)', marginTop: SPACING[1] },
-  weatherDesc:      { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.6)', textTransform: 'capitalize' },
-  weatherRight:     { alignItems: 'center' },
-  weatherMeta:      { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.7)', marginTop: SPACING[1] },
-  weatherError: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius:  RADIUS.lg, padding: SPACING[4], gap: SPACING[2],
+  weatherCardInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[4],
+    paddingTop: SPACING[4],
+    paddingBottom: SPACING[2],
   },
-  weatherErrorText: { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.5)' },
+  weatherLeft: { flex: 1 },
+  weatherTemp: {
+    fontSize: 54,
+    fontWeight: FONT_WEIGHT.black,
+    color: '#FFFFFF',
+    lineHeight: 58,
+    letterSpacing: -2,
+  },
+  weatherCity: { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.78)', marginTop: SPACING[1] },
+  weatherDesc: { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.55)', textTransform: 'capitalize', marginTop: SPACING[1] },
+  weatherRight: { alignItems: 'center', gap: SPACING[2] },
+  weatherMetaRow: { flexDirection: 'row', alignItems: 'center' },
+  weatherMeta: { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.65)' },
+  weatherTapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: SPACING[4],
+    paddingBottom: SPACING[3],
+    gap: SPACING[1],
+  },
+  weatherTapText: { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.45)' },
+  weatherSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[2],
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: RADIUS.lg,
+    padding: SPACING[4],
+  },
+  weatherErrorText: { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.45)' },
+
+  // Stats
   statsRow: {
-    flexDirection: 'row', paddingHorizontal: SPACING[4],
-    gap: SPACING[3], marginTop: SPACING[4],
+    flexDirection: 'row',
+    paddingHorizontal: SPACING[4],
+    gap: SPACING[3],
+    marginTop: SPACING[5],
   },
   statCard: {
-    flex: 1, alignItems: 'center', padding: SPACING[3],
-    borderRadius: RADIUS.lg, borderWidth: 1, gap: SPACING[1], elevation: 2,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACING[4],
+    paddingHorizontal: SPACING[2],
+    borderRadius: RADIUS.xl,
+    gap: SPACING[1],
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
-  statNumber: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  statLabel:  { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium },
-  section:       { paddingHorizontal: SPACING[4], marginTop: SPACING[5] },
-  sectionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: SPACING[3],
+  statIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING[1],
   },
-  sectionTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  seeAll:       { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  statNumber: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, letterSpacing: -0.3 },
+  statLabel: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium },
+
+  // Section
+  section: { paddingHorizontal: SPACING[4], marginTop: SPACING[5] },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING[3] },
+  sectionTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, letterSpacing: -0.2 },
+  seeAll: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold },
+
+  // Events
   eventItem: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: SPACING[3], borderRadius: RADIUS.md,
-    borderWidth: 1, marginBottom: SPACING[2], gap: SPACING[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING[2],
+    paddingVertical: SPACING[3],
+    paddingRight: SPACING[4],
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
-  eventDot:   { width: 8, height: 8, borderRadius: 4 },
-  eventTitle: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.medium },
-  eventTime:  { fontSize: FONT_SIZE.sm, marginTop: 2 },
+  eventAccent: { width: 4, alignSelf: 'stretch', borderRadius: 2, marginLeft: SPACING[3] },
+  eventTitle: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold },
+  eventTime: { fontSize: FONT_SIZE.xs, marginTop: 2 },
   emptyCard: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: SPACING[4], borderRadius: RADIUS.md,
-    borderWidth: 1, gap: SPACING[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[4],
+    padding: SPACING[4],
+    borderRadius: RADIUS.xl,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
-  emptyText: { fontSize: FONT_SIZE.sm },
+  emptyTitle: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold },
+  emptySubtitle: { fontSize: FONT_SIZE.sm, marginTop: 2 },
+
+  // Habit progress
+  habitCard: {
+    borderRadius: RADIUS.xl,
+    padding: SPACING[4],
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  habitCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING[3],
+  },
+  habitCount: { fontSize: FONT_SIZE['2xl'], fontWeight: FONT_WEIGHT.black, letterSpacing: -0.5 },
+  habitTotal: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.medium },
+  habitSubtitle: { fontSize: FONT_SIZE.sm, marginTop: SPACING[1] },
+  habitBadge: { borderRadius: RADIUS.full, paddingHorizontal: SPACING[3], paddingVertical: SPACING[1] },
+  habitBadgeText: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  progressTrack: { height: 8, borderRadius: RADIUS.full, overflow: 'hidden', marginBottom: SPACING[3] },
+  progressFill: { height: 8, borderRadius: RADIUS.full, minWidth: 4 },
+  habitEncouragement: { fontSize: FONT_SIZE.sm },
+
+  // Expense card
+  expenseCard: {
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#31473A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  expenseCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING[5],
+    paddingTop: SPACING[5],
+    paddingBottom: SPACING[2],
+  },
+  expenseLabel: { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.65)' },
+  expenseAmount: { fontSize: FONT_SIZE['3xl'], fontWeight: FONT_WEIGHT.black, color: '#FFFFFF', marginTop: SPACING[1], letterSpacing: -1 },
+  expenseIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expenseTapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: SPACING[1],
+    paddingHorizontal: SPACING[5],
+    paddingBottom: SPACING[4],
+  },
+  expenseTapText: { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.5)' },
+
+  // Module grid
   moduleGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: SPACING[3], marginTop: SPACING[3],
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING[3],
+    marginTop: SPACING[3],
   },
   moduleCard: {
-    width: '30.5%', aspectRatio: 1,
-    borderRadius: RADIUS.lg, overflow: 'hidden', elevation: 4,
+    width: '30.5%',
+    aspectRatio: 1,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
-  moduleGradient: {
-    flex: 1, justifyContent: 'center',
-    alignItems: 'center', gap: SPACING[2],
-  },
-  moduleLabel: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: '#FFFFFF' },
+  moduleGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: SPACING[2] },
+  moduleLabel: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: '#FFFFFF', letterSpacing: 0.1 },
 });

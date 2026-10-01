@@ -67,7 +67,11 @@ class AlarmReceiver : BroadcastReceiver() {
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION or
-                    Intent.FLAG_ACTIVITY_NO_HISTORY
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            // Note: FLAG_ACTIVITY_NO_HISTORY was intentionally removed.
+            // It conflicted with singleTask launchMode: after Alarm #1 was dismissed,
+            // the singleTask task had no history entry, causing Android to silently
+            // swallow subsequent startActivity calls for Alarm #2+.
         }
         context.startActivity(activityIntent)
 

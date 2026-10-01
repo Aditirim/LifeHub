@@ -87,11 +87,16 @@ export function useTimer() {
   function startDisplayLoop() {
     clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
-      const rem = getRemaining(stateRef.current);
-      setRemaining(rem);
-      if (rem <= 0 && stateRef.current.status === 'running') {
+      const s = stateRef.current;
+      if (s.status !== 'running') {
         clearInterval(intervalRef.current);
-        applyState({ ...stateRef.current, status: 'done' });
+        return;
+      }
+      const rem = Math.max(0, s.targetTimestamp - Date.now());
+      setRemaining(rem);
+      if (rem <= 0) {
+        clearInterval(intervalRef.current);
+        applyState({ ...s, status: 'done' });
       }
     }, 500);
   }

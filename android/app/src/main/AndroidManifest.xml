@@ -55,6 +55,11 @@
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!--
+      FOREGROUND_SERVICE_SPECIAL_USE — declares that AlarmService is used for alarm playback
+      on Android 14+ (API 34+) where foreground service types must be declared precisely.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!--
       READ_MEDIA_AUDIO / READ_EXTERNAL_STORAGE — for reading user-selected audio files.
@@ -64,6 +69,12 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+
+    <!--
+      USE_EXACT_ALARM — Required on Android 13+ (API 33+) as an alternative to
+      SCHEDULE_EXACT_ALARM that doesn't require user approval for alarm-clock apps.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
       android:name=".MainApplication"
@@ -102,24 +113,31 @@
         android:showOnLockScreen="true"
         android:turnScreenOn="true"
         android:taskAffinity="${applicationId}.alarm"
-        android:launchMode="singleInstance" />
+        android:launchMode="singleTask" />
 
       <!--
         AlarmService — foreground service for ringtone playback.
         foregroundServiceType="mediaPlayback" declares the service type on Android 10+.
+        On Android 14+ (API 34+) we also need "specialUse" if using alarm audio outside media.
       -->
       <service
         android:name=".alarm.AlarmService"
         android:exported="false"
-        android:foregroundServiceType="mediaPlayback" />
+        android:foregroundServiceType="mediaPlayback|specialUse">
+        <property
+          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="alarm" />
+      </service>
 
       <!--
         AlarmReceiver — BroadcastReceiver for AlarmManager exact alarms.
-        exported=false: only triggered by the system AlarmManager via our own PendingIntents.
+        exported=true IS required on Android 12+ for AlarmManager to be able to
+        deliver broadcasts to the receiver via PendingIntent.getBroadcast().
+        The explicit package in the PendingIntent limits who can trigger this.
       -->
       <receiver
         android:name=".alarm.AlarmReceiver"
-        android:exported="false">
+        android:exported="true">
         <intent-filter>
           <action android:name="com.lifehub.ALARM_FIRE" />
         </intent-filter>
@@ -127,10 +145,12 @@
 
       <!--
         TimerReceiver — BroadcastReceiver for timer completion.
+        exported=true IS required on Android 12+ for AlarmManager to be able to
+        deliver broadcasts to the receiver via PendingIntent.getBroadcast().
       -->
       <receiver
         android:name=".alarm.TimerReceiver"
-        android:exported="false">
+        android:exported="true">
         <intent-filter>
           <action android:name="com.lifehub.TIMER_FIRE" />
         </intent-filter>
@@ -139,12 +159,14 @@
       <!--
         BootReceiver — reschedules alarms after device reboot.
         exported=true IS required for BOOT_COMPLETED receivers on Android 12+.
-        The RECEIVE_BOOT_COMPLETED permission limits who can trigger this.
+        Do NOT use android:permission here — the system sends BOOT_COMPLETED and
+        we must not restrict who can broadcast to us with a permission guard on
+        the receiver element. The RECEIVE_BOOT_COMPLETED uses-permission above
+        declares our intent to receive the broadcast.
       -->
       <receiver
         android:name=".alarm.BootReceiver"
-        android:exported="true"
-        android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+        android:exported="true">
         <intent-filter>
           <action android:name="android.intent.action.BOOT_COMPLETED" />
           <action android:name="android.intent.action.QUICKBOOT_POWERON" />

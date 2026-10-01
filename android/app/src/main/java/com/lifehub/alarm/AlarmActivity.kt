@@ -78,12 +78,16 @@ class AlarmActivity : Activity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // If a new alarm fires while this activity is on screen,
-        // update to show the new alarm's info
+        setIntent(intent)  // update getIntent() so subsequent reads are correct
+        // If a new alarm fires while this activity is on screen (singleTask delivery),
+        // update to show the new alarm's info and refresh the UI labels.
         val newId = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID)
         if (newId != null && newId != alarmId) {
             alarmId = newId
             alarm   = AlarmStorage.getById(this, newId)
+            // Refresh the label and ringtone text in the existing layout
+            if (::labelText.isInitialized)    labelText.text    = alarm?.label ?: "Alarm"
+            if (::ringtoneText.isInitialized) ringtoneText.text = "🔔 ${resolveRingtoneName()}"
         }
     }
 
@@ -218,10 +222,12 @@ class AlarmActivity : Activity() {
         val id = alarmId ?: return
         val a  = alarm    ?: return
 
-        // Schedule the snooze alarm (native, so it works with app closed)
+        // Schedule the snooze alarm (native, so it works with app closed).
+        // Use a timestamp-suffix so multiple snoozes of the same alarm don't
+        // collide in storage or PendingIntent request codes.
         val snoozeMs = a.snoozeMinutes * 60 * 1000L
         val snoozeData = a.copy(
-            id         = "${id}_snooze",
+            id         = "${id}_snooze_${System.currentTimeMillis()}",
             enabled    = true,
             repeatDays = emptyList(), // one-time snooze
             updatedAt  = System.currentTimeMillis(),
@@ -229,15 +235,22 @@ class AlarmActivity : Activity() {
         AlarmStorage.save(this, snoozeData)
         AlarmScheduler.schedule(this, snoozeData, System.currentTimeMillis() + snoozeMs)
 
-        // Stop the current ringtone
-        stopService(Intent(this, AlarmService::class.java))
+        // Use explicit ACTION_SNOOZE_ALARM so AlarmService runs its proper cleanup
+        // (stopAlarm() → release MediaPlayer, abandon audio focus, cancel vibration)
+        startService(Intent(this, AlarmService::class.java).apply {
+            action = AlarmService.ACTION_SNOOZE_ALARM
+            putExtra(AlarmScheduler.EXTRA_ALARM_ID, id)
+        })
 
         finish()
     }
 
     private fun onDismiss() {
-        // Tell the service to stop
-        stopService(Intent(this, AlarmService::class.java))
+        // Use explicit ACTION_STOP_ALARM so AlarmService runs stopAlarm() cleanup path
+        startService(Intent(this, AlarmService::class.java).apply {
+            action = AlarmService.ACTION_STOP_ALARM
+            putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId ?: "")
+        })
         finish()
     }
 

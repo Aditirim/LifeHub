@@ -321,13 +321,24 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
                 RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             }
 
-            previewPlayer = MediaPlayer().apply {
-                setDataSource(reactContext, uri)
-                isLooping = false
-                setOnCompletionListener { it.release(); previewPlayer = null }
-                prepare()
-                start()
+            val mp = MediaPlayer()
+            // Use STREAM_ALARM so preview plays even when media volume is muted (e.g. silent mode)
+            val attrs = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setLegacyStreamType(android.media.AudioManager.STREAM_ALARM)
+                .build()
+            // AudioAttributes MUST be set before setDataSource
+            mp.setAudioAttributes(attrs)
+            mp.setDataSource(reactContext, uri)
+            mp.isLooping = false
+            mp.setOnCompletionListener { it.release(); previewPlayer = null }
+            mp.setOnErrorListener { _, _, _ -> mp.release(); previewPlayer = null; true }
+            mp.setOnPreparedListener { player ->
+                previewPlayer = player
+                player.start()
             }
+            mp.prepareAsync()
             promise.resolve(null)
         } catch (e: Exception) {
             Log.e(TAG, "previewRingtone error: ${e.message}")
