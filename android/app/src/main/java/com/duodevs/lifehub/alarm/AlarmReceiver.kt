@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import com.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
+import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
 
 /**
  * AlarmReceiver — receives the AlarmManager broadcast when an alarm fires.

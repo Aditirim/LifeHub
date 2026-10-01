@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -25,7 +25,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.lifehub.R
+import com.duodevs.lifehub.R
 
 /**
  * AlarmService — foreground service responsible for alarm audio playback.
@@ -55,8 +55,8 @@ class AlarmService : Service() {
         private const val CHANNEL_ID = "lifehub_alarm_service"
 
         /** Intent action sent to this service to stop it */
-        const val ACTION_STOP_ALARM  = "com.lifehub.STOP_ALARM"
-        const val ACTION_SNOOZE_ALARM = "com.lifehub.SNOOZE_ALARM"
+        const val ACTION_STOP_ALARM  = "com.duodevs.lifehub.STOP_ALARM"
+        const val ACTION_SNOOZE_ALARM = "com.duodevs.lifehub.SNOOZE_ALARM"
 
         /** Auto-dismiss after this duration if user doesn't interact */
         private const val MAX_ALARM_DURATION_MS = 5 * 60 * 1000L // 5 minutes

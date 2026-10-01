@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import org.json.JSONArray
 import org.json.JSONObject

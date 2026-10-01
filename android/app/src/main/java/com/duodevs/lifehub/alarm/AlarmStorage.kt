@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.content.Context
 import android.content.SharedPreferences

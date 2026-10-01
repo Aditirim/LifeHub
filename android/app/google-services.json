@@ -1,26 +1,44 @@
 {
   "project_info": {
-    "project_number": "391075359701",
-    "project_id": "lifehub-bc8ac",
-    "storage_bucket": "lifehub-bc8ac.firebasestorage.app"
+    "project_number": "946672163519",
+    "project_id": "lifehub-371d5",
+    "storage_bucket": "lifehub-371d5.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:391075359701:android:1bbd25cc2a9162df8aab5c",
+        "mobilesdk_app_id": "1:946672163519:android:7202030683d541898b040a",
         "android_client_info": {
-          "package_name": "com.lifehub"
+          "package_name": "com.duodevs.lifehub"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "946672163519-pgbn9sq4ukdv2d26pprm8341dpue6v41.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.duodevs.lifehub",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "946672163519-ljg8gkuov6gpa39r48iq92rjqarlg8qp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCfQtGoVl1qZNFCCKLM4PvhzzkXgtpVBXQ"
+          "current_key": "AIzaSyBQUJLlSJkUillbTRqmpo83Sj5WBwnedKs"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "946672163519-ljg8gkuov6gpa39r48iq92rjqarlg8qp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

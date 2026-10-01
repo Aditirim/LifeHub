@@ -139,7 +139,7 @@
         android:name=".alarm.AlarmReceiver"
         android:exported="true">
         <intent-filter>
-          <action android:name="com.lifehub.ALARM_FIRE" />
+          <action android:name="com.duodevs.lifehub.ALARM_FIRE" />
         </intent-filter>
       </receiver>
 
@@ -152,7 +152,7 @@
         android:name=".alarm.TimerReceiver"
         android:exported="true">
         <intent-filter>
-          <action android:name="com.lifehub.TIMER_FIRE" />
+          <action android:name="com.duodevs.lifehub.TIMER_FIRE" />
         </intent-filter>
       </receiver>
 

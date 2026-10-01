@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.app.AlarmManager
 import android.content.Intent
@@ -9,7 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.facebook.react.bridge.*
-import com.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
+import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID

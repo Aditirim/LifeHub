@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Switch, Alert,
+  StyleSheet, Switch, Alert, TextInput, ActivityIndicator, Modal,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -26,12 +26,22 @@ import { ConfirmDialog } from '../../components';
 import { requestNotificationPermission } from '../../services/notificationService';
 
 export default function ProfileScreen() {
-  const { user, signOut }   = useAuth();
+  const { user, signOut, deleteAccount, reauthenticate } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
 
-  const [logoutConfirm,    setLogoutConfirm]    = useState(false);
-  const [notifEnabled,     setNotifEnabled]     = useState(true);
-  const [notifRequesting,  setNotifRequesting]  = useState(false);
+  const [logoutConfirm,      setLogoutConfirm]      = useState(false);
+  const [notifEnabled,       setNotifEnabled]       = useState(true);
+  const [notifRequesting,    setNotifRequesting]    = useState(false);
+
+  // Delete account state
+  const [deleteConfirm,      setDeleteConfirm]      = useState(false);
+  const [deleting,           setDeleting]           = useState(false);
+  // Re-authentication state (for stale sessions)
+  const [reauthVisible,      setReauthVisible]      = useState(false);
+  const [reauthPassword,     setReauthPassword]     = useState('');
+  const [reauthLoading,      setReauthLoading]      = useState(false);
+  const [reauthError,        setReauthError]        = useState<string | null>(null);
+  const [showReauthPassword, setShowReauthPassword] = useState(false);
 
   // Build user initials for the avatar (e.g. "John Doe" → "JD")
   const initials = (user?.displayName ?? user?.email ?? 'U')
@@ -48,6 +58,96 @@ export default function ProfileScreen() {
       // AppNavigator will automatically show the Auth stack
     } catch {
       Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  }
+
+  // ── Delete Account ─────────────────────────────────────────────────
+
+  /** Attempts account deletion. Shows re-auth modal if Firebase requires it. */
+  async function handleDeleteAccount() {
+    setDeleteConfirm(false);
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      // AppNavigator detects user→null and redirects to Login automatically.
+    } catch (error: any) {
+      setDeleting(false);
+      if (error?.code === 'auth/requires-recent-login') {
+        // Session is stale — prompt re-authentication before retrying.
+        setReauthPassword('');
+        setReauthError(null);
+        setReauthVisible(true);
+      } else if (error?.code === 'auth/no-current-user') {
+        Alert.alert('Not Signed In', 'No authenticated user was found. Please sign in and try again.');
+      } else if (error?.code === 'auth/network-request-failed') {
+        Alert.alert('No Connection', 'Account deletion requires an internet connection. Please check your network and try again.');
+      } else if (
+        error?.code === 'firestore/permission-denied' ||
+        error?.code === 'permission-denied'
+      ) {
+        Alert.alert(
+          'Permission Denied',
+          'Could not delete your data. Please contact support if this persists.',
+        );
+      } else {
+        Alert.alert(
+          'Deletion Failed',
+          'Something went wrong while deleting your account. Please try again.',
+        );
+      }
+    }
+  }
+
+  /**
+   * Called when the user submits the re-authentication modal.
+   * Reauthenticates, then immediately retries deleteAccount().
+   */
+  async function handleReauth() {
+    if (!reauthPassword.trim()) {
+      setReauthError('Please enter your password.');
+      return;
+    }
+    const email = user?.email ?? '';
+    if (!email) {
+      setReauthError('Could not determine your account email. Please sign out and sign in again.');
+      return;
+    }
+
+    setReauthLoading(true);
+    setReauthError(null);
+    try {
+      await reauthenticate(email, reauthPassword);
+      // Clear password from memory immediately.
+      setReauthPassword('');
+      setReauthVisible(false);
+    } catch (error: any) {
+      setReauthLoading(false);
+      if (
+        error?.code === 'auth/wrong-password' ||
+        error?.code === 'auth/invalid-credential'
+      ) {
+        setReauthError('Incorrect password. Please try again.');
+      } else if (error?.code === 'auth/too-many-requests') {
+        setReauthError('Too many attempts. Please wait a moment and try again.');
+      } else if (error?.code === 'auth/network-request-failed') {
+        setReauthError('No internet connection. Please check your network.');
+      } else {
+        setReauthError('Authentication failed. Please try again.');
+      }
+      return;
+    }
+
+    // Re-auth succeeded — retry deletion.
+    setReauthLoading(false);
+    setDeleting(true);
+    try {
+      await deleteAccount();
+    } catch (retryError: any) {
+      setDeleting(false);
+      Alert.alert(
+        'Deletion Failed',
+        retryError?.message ?? 'Account deletion failed after re-authentication. Please contact support.',
+      );
     }
   }
 
@@ -162,6 +262,34 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* ── Danger Zone ────────────────────────────────────── */}
+        <View style={[styles.section, styles.dangerSection]}>
+          <Text style={[styles.sectionLabel, styles.dangerSectionLabel]}>DANGER ZONE</Text>
+          <TouchableOpacity
+            style={styles.deleteAccountBtn}
+            onPress={() => setDeleteConfirm(true)}
+            disabled={deleting}
+            accessibilityLabel="Delete Account"
+            accessibilityRole="button">
+            {deleting ? (
+              <ActivityIndicator size="small" color="#C26B5C" />
+            ) : (
+              <>
+                <View style={styles.deleteAccountIconWrap}>
+                  <Text style={styles.deleteAccountIcon}>⚠️</Text>
+                </View>
+                <View style={styles.deleteAccountTextWrap}>
+                  <Text style={styles.deleteAccountLabel}>Delete Account</Text>
+                  <Text style={styles.deleteAccountSub}>
+                    Permanently delete your account and all data
+                  </Text>
+                </View>
+                <Text style={styles.deleteAccountChevron}>›</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* ── Logout ──────────────────────────────────────────────── */}
         <View style={[styles.section, { marginTop: SPACING[4] }]}>
           <TouchableOpacity
@@ -185,6 +313,125 @@ export default function ProfileScreen() {
         onConfirm={handleLogout}
         onCancel={() => setLogoutConfirm(false)}
       />
+
+      {/* ── Delete Account Confirmation ─────────────────────────────── */}
+      <ConfirmDialog
+        visible={deleteConfirm}
+        title="Delete Your LifeHub Account?"
+        message={
+          'This permanently deletes your account and all associated LifeHub data '
+          + '(notes, habits, events, and transactions). This action cannot be undone.'
+        }
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setDeleteConfirm(false)}
+      />
+
+      {/* ── Re-authentication Modal ──────────────────────────────────── */}
+      {/*
+        Shown when Firebase rejects deletion with 'requires-recent-login'.
+        The user must re-enter their password before we can permanently delete
+        their account. Passwords are never logged or stored.
+      */}
+      <Modal
+        visible={reauthVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!reauthLoading) {
+            setReauthVisible(false);
+            setReauthPassword('');
+            setReauthError(null);
+          }
+        }}>
+        <View style={[styles.reauthOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.reauthBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+
+            {/* Header */}
+            <View style={styles.reauthHeader}>
+              <Text style={styles.reauthWarningIcon}>🔒</Text>
+              <Text style={[styles.reauthTitle, { color: colors.text }]}>
+                Confirm Your Identity
+              </Text>
+            </View>
+
+            <Text style={[styles.reauthBody, { color: colors.textSecondary }]}>
+              For your security, please re-enter your password to confirm permanent account deletion.
+            </Text>
+
+            {/* Email (display-only) */}
+            <Text style={[styles.reauthEmail, { color: colors.textMuted }]}>
+              {user?.email}
+            </Text>
+
+            {/* Password field */}
+            <View style={[
+              styles.reauthInputWrap,
+              {
+                backgroundColor: colors.card,
+                borderColor: reauthError ? '#C26B5C' : colors.border,
+              },
+            ]}>
+              <TextInput
+                style={[styles.reauthInput, { color: colors.text }]}
+                value={reauthPassword}
+                onChangeText={t => { setReauthPassword(t); setReauthError(null); }}
+                placeholder="Your password"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showReauthPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!reauthLoading}
+                returnKeyType="done"
+                onSubmitEditing={handleReauth}
+              />
+              <TouchableOpacity
+                onPress={() => setShowReauthPassword(v => !v)}
+                style={styles.reauthEyeBtn}>
+                <Icon
+                  name={showReauthPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Inline error */}
+            {reauthError ? (
+              <Text style={styles.reauthErrorText}>{reauthError}</Text>
+            ) : null}
+
+            {/* Buttons */}
+            <View style={styles.reauthButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.reauthBtn,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+                onPress={() => {
+                  setReauthVisible(false);
+                  setReauthPassword('');
+                  setReauthError(null);
+                }}
+                disabled={reauthLoading}>
+                <Text style={[styles.reauthBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.reauthBtn, styles.reauthDeleteBtn]}
+                onPress={handleReauth}
+                disabled={reauthLoading}>
+                {reauthLoading
+                  ? <ActivityIndicator size="small" color="#FFFFFF" />
+                  : <Text style={[styles.reauthBtnText, styles.reauthBtnTextWhite]}>Delete Account</Text>}
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -300,4 +547,125 @@ const styles = StyleSheet.create({
     borderWidth:    1,
   },
   logoutText: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
+
+  // Danger zone
+  dangerSection: {
+    marginTop: SPACING[2],
+    marginBottom: SPACING[2],
+  },
+  deleteAccountBtn: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    padding:         SPACING[4],
+    borderRadius:    RADIUS.lg,
+    borderWidth:     1.5,
+    borderColor:     '#C26B5C',
+    backgroundColor: 'rgba(194,107,92,0.08)',
+    gap:             SPACING[3],
+    minHeight:       64,
+  },
+  deleteAccountIconWrap: {
+    width:           40,
+    height:          40,
+    borderRadius:    20,
+    backgroundColor: 'rgba(194,107,92,0.15)',
+    justifyContent:  'center',
+    alignItems:      'center',
+  },
+  deleteAccountIcon: { fontSize: 18 },
+  deleteAccountTextWrap: { flex: 1 },
+  deleteAccountLabel: {
+    fontSize:   FONT_SIZE.base,
+    fontWeight: FONT_WEIGHT.semibold,
+    color:      '#C26B5C',
+  },
+  deleteAccountSub: {
+    fontSize:  FONT_SIZE.sm,
+    color:     '#C26B5C',
+    opacity:   0.75,
+    marginTop: 2,
+  },
+  deleteAccountChevron: {
+    fontSize: 22,
+    color:    '#C26B5C',
+    opacity:  0.6,
+  },
+
+  // Re-authentication modal
+  reauthOverlay: {
+    flex:            1,
+    justifyContent:  'center',
+    alignItems:      'center',
+    paddingHorizontal: SPACING[6],
+  },
+  reauthBox: {
+    width:        '100%',
+    borderRadius: RADIUS.xl,
+    padding:      SPACING[6],
+    borderWidth:  1,
+    elevation:    12,
+  },
+  reauthHeader: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            SPACING[2],
+    marginBottom:   SPACING[3],
+  },
+  reauthWarningIcon: { fontSize: 22 },
+  reauthTitle: {
+    fontSize:   FONT_SIZE.xl,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  reauthBody: {
+    fontSize:     FONT_SIZE.base,
+    lineHeight:   22,
+    marginBottom: SPACING[3],
+  },
+  reauthEmail: {
+    fontSize:     FONT_SIZE.sm,
+    marginBottom: SPACING[4],
+    fontStyle:    'italic',
+  },
+  reauthInputWrap: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    borderRadius:      RADIUS.md,
+    borderWidth:       1,
+    paddingHorizontal: SPACING[3],
+    height:            52,
+    marginBottom:      SPACING[2],
+  },
+  reauthInput: {
+    flex:     1,
+    fontSize: FONT_SIZE.base,
+    height:   52,
+  },
+  reauthEyeBtn: { padding: SPACING[1] },
+  reauthErrorText: {
+    color:        '#C26B5C',
+    fontSize:     FONT_SIZE.sm,
+    marginBottom: SPACING[3],
+  },
+  reauthButtons: {
+    flexDirection: 'row',
+    gap:           SPACING[3],
+    marginTop:     SPACING[4],
+  },
+  reauthBtn: {
+    flex:            1,
+    paddingVertical: SPACING[3],
+    borderRadius:    RADIUS.md,
+    alignItems:      'center',
+    borderWidth:     1,
+  },
+  reauthDeleteBtn: {
+    backgroundColor: '#C26B5C',
+    borderColor:     '#C26B5C',
+  },
+  reauthBtnText: {
+    fontSize:   FONT_SIZE.base,
+    fontWeight: FONT_WEIGHT.semibold,
+  },
+  reauthBtnTextWhite: { color: '#FFFFFF' },
+  dangerSectionLabel: { color: '#C26B5C' },
 });

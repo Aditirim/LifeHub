@@ -1,10 +1,10 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
+import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
 
 /**
  * BootReceiver — restores all enabled alarms after device reboot.

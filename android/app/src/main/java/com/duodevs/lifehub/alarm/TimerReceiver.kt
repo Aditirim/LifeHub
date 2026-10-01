@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,8 +14,8 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.lifehub.MainActivity
-import com.lifehub.R
+import com.duodevs.lifehub.MainActivity
+import com.duodevs.lifehub.R
 
 /**
  * TimerReceiver — fires when a countdown timer expires.

@@ -1,4 +1,4 @@
-package com.lifehub.alarm
+package com.duodevs.lifehub.alarm
 
 import android.annotation.SuppressLint
 import android.app.AlarmManager
@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import com.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
+import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
 
 /**
  * AlarmScheduler — wraps Android AlarmManager for exact alarm scheduling.
@@ -24,14 +24,14 @@ import com.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
  *  - FLAG_UPDATE_CURRENT: replacing an existing PendingIntent with the same ID
  *  - FLAG_IMMUTABLE: required on API 31+ for security
  *
- * Action string: "com.lifehub.ALARM_FIRE"
+ * Action string: "com.duodevs.lifehub.ALARM_FIRE"
  * Extra keys:    "alarm_id" (String)
  */
 object AlarmScheduler {
 
     private const val TAG = "AlarmScheduler"
-    const val ACTION_ALARM_FIRE  = "com.lifehub.ALARM_FIRE"
-    const val ACTION_TIMER_FIRE  = "com.lifehub.TIMER_FIRE"
+    const val ACTION_ALARM_FIRE  = "com.duodevs.lifehub.ALARM_FIRE"
+    const val ACTION_TIMER_FIRE  = "com.duodevs.lifehub.TIMER_FIRE"
     const val EXTRA_ALARM_ID     = "alarm_id"
     const val EXTRA_TIMER_ID     = "timer_id"
     const val EXTRA_TIMER_LABEL  = "timer_label"

@@ -1,4 +1,4 @@
-package com.lifehub
+package com.duodevs.lifehub
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

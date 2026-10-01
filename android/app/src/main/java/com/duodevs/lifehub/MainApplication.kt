@@ -1,4 +1,4 @@
-package com.lifehub
+package com.duodevs.lifehub
 
 import android.app.Application
 import com.facebook.react.PackageList
@@ -6,7 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import com.lifehub.alarm.AlarmPackage
+import com.duodevs.lifehub.alarm.AlarmPackage
 
 class MainApplication : Application(), ReactApplication {
 

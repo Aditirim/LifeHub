@@ -8,10 +8,16 @@
  *  - register(email, password, displayName)
  *  - signOut()
  *  - resetPassword(email)
+ *  - deleteAccount()
  *
  * The auth state is kept in sync with Firebase via onAuthStateChanged().
  * When the auth state changes, AppNavigator reads this context and
  * automatically navigates between the Auth stack and Main stack.
+ *
+ * deleteAccount() deletes all user-owned Firestore data first, then removes
+ * the Firebase Authentication account. If Firebase requires recent login it
+ * throws an error with code 'auth/requires-recent-login' so callers can
+ * present a re-authentication flow before retrying.
  */
 
 import React, {
@@ -25,8 +31,18 @@ import {
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   User,
 } from '@react-native-firebase/auth';
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  deleteDoc,
+  doc,
+  writeBatch,
+} from '@react-native-firebase/firestore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +53,20 @@ interface AuthContextValue {
   register:      (email: string, password: string, displayName: string) => Promise<void>;
   signOut:       () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  /**
+   * Deletes all user-owned Firestore data then permanently removes the
+   * Firebase Authentication account. Signs out on success.
+   *
+   * Throws with error.code === 'auth/requires-recent-login' when Firebase
+   * demands re-authentication before deletion can proceed.
+   */
+  deleteAccount: () => Promise<void>;
+  /**
+   * Re-authenticates the current user with their email/password credential.
+   * Call this before retrying deleteAccount() when requires-recent-login fires.
+   * NEVER log the password parameter.
+   */
+  reauthenticate: (email: string, password: string) => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -96,8 +126,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ─── Provide context ────────────────────────────────────────────────────────
 
+  // ── Delete account ────────────────────────────────────────────────────────
+
+  /**
+   * Deletes all user-owned Firestore documents/subcollections then removes
+   * the Firebase Authentication account. Navigation is handled automatically
+   * by AppNavigator when the auth state changes to null.
+   *
+   * Firestore structure deleted:
+   *   users/{uid}/notes         (all docs)
+   *   users/{uid}/habits        (all docs)
+   *   users/{uid}/events        (all docs)
+   *   users/{uid}/transactions  (all docs)
+   *   users/{uid}               (parent doc, if it exists)
+   */
+  async function deleteAccount() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw Object.assign(new Error('No authenticated user found.'), { code: 'auth/no-current-user' });
+    }
+
+    const uid = currentUser.uid;
+    const firestoreDb = getFirestore();
+
+    // ── Step 1: Delete Firestore subcollections in batches ─────────────────
+    // Subcollection names as documented in firebase.ts.
+    const subcollectionNames = ['notes', 'habits', 'events', 'transactions'] as const;
+
+    for (const subcol of subcollectionNames) {
+      const colRef = collection(firestoreDb, 'users', uid, subcol);
+      const snapshot = await getDocs(colRef);
+
+      // Use write batches (max 500 ops each) to efficiently delete all docs.
+      const BATCH_SIZE = 450;
+      let batch = writeBatch(firestoreDb);
+      let opCount = 0;
+
+      for (const docSnap of snapshot.docs) {
+        batch.delete(docSnap.ref);
+        opCount++;
+        if (opCount >= BATCH_SIZE) {
+          await batch.commit();
+          batch = writeBatch(firestoreDb);
+          opCount = 0;
+        }
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+    }
+
+    // ── Step 2: Delete the parent users/{uid} document (if it exists) ──────
+    const userDocRef = doc(firestoreDb, 'users', uid);
+    await deleteDoc(userDocRef).catch(() => {
+      // If the document doesn't exist, deleteDoc throws — ignore safely.
+    });
+
+    // ── Step 3: Delete the Firebase Auth account ────────────────────────────
+    // This will throw 'auth/requires-recent-login' if the session is stale.
+    // The caller (ProfileScreen) handles this by prompting re-authentication.
+    await currentUser.delete();
+
+    // ── Step 4: Sign out — clears local auth state ──────────────────────────
+    // After delete() the user is technically already signed out in Firebase,
+    // but calling signOut() ensures the local auth listener fires cleanly.
+    try {
+      await firebaseSignOut(auth);
+    } catch {
+      // Ignore sign-out errors after successful deletion.
+    }
+  }
+
+  /** Re-authenticates the current user. Never logs the password. */
+  async function reauthenticate(email: string, password: string) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw Object.assign(new Error('No authenticated user.'), { code: 'auth/no-current-user' });
+    }
+    const credential = EmailAuthProvider.credential(email, password);
+    await reauthenticateWithCredential(currentUser, credential);
+  }
+
+  // ─── Provide context ────────────────────────────────────────────────────────
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, register, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ user, loading, signIn, register, signOut, resetPassword, deleteAccount, reauthenticate }}>
       {children}
     </AuthContext.Provider>
   );
