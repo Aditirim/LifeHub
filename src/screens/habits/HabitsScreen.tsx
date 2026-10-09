@@ -16,11 +16,11 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, StyleSheet,
   Modal, TextInput, Alert, FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { format, subDays, isToday } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -30,7 +30,7 @@ import {
 import { habitsCollection, db, serverTimestamp } from '../../services/firebase';
 import { SPACING, RADIUS } from '../../constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '../../constants/typography';
-import { HABIT_COLORS } from '../../constants/colors';
+import { HABIT_COLORS, GRADIENTS } from '../../constants/colors';
 import { FAB, ConfirmDialog, EmptyState, LoadingSpinner } from '../../components';
 import { formatStreak } from '../../utils/formatters';
 import LinearGradient from 'react-native-linear-gradient';
@@ -38,11 +38,11 @@ import LinearGradient from 'react-native-linear-gradient';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Habit {
-  id:             string;
-  name:           string;
-  color:          string;
+  id: string;
+  name: string;
+  color: string;
   completedDates: string[];  // array of 'YYYY-MM-DD'
-  createdAt:      any;
+  createdAt: any;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,19 +82,19 @@ function getLast7Days(): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HabitsScreen() {
-  const { user }   = useAuth();
-  const { colors } = useTheme();
-  const uid        = user?.uid ?? '';
+  const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+  const uid = user?.uid ?? '';
 
-  const [habits,       setHabits]       = useState<Habit[]>([]);
-  const [loading,      setLoading]      = useState(true);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editHabit,    setEditHabit]    = useState<Habit | null>(null);
-  const [habitName,    setHabitName]    = useState('');
-  const [habitColor,   setHabitColor]   = useState(HABIT_COLORS[0].color);
-  const [saving,       setSaving]       = useState(false);
+  const [editHabit, setEditHabit] = useState<Habit | null>(null);
+  const [habitName, setHabitName] = useState('');
+  const [habitColor, setHabitColor] = useState(HABIT_COLORS[0].color);
+  const [saving, setSaving] = useState(false);
 
-  const [deleteTarget,   setDeleteTarget]   = useState<Habit | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Habit | null>(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const last7Days = getLast7Days();
@@ -118,7 +118,7 @@ export default function HabitsScreen() {
   // ── Mark/Unmark habit for today ───────────────────────────────────────────
 
   async function toggleToday(habit: Habit) {
-    const dates    = habit.completedDates ?? [];
+    const dates = habit.completedDates ?? [];
     const isMarked = dates.includes(TODAY);
     const newDates = isMarked
       ? dates.filter(d => d !== TODAY)                           // unmark
@@ -157,10 +157,10 @@ export default function HabitsScreen() {
         await updateDoc(docRef, { name: habitName.trim(), color: habitColor });
       } else {
         await addDoc(habitsCollection(uid), {
-          name:           habitName.trim(),
-          color:          habitColor,
+          name: habitName.trim(),
+          color: habitColor,
           completedDates: [],
-          createdAt:      serverTimestamp(),
+          createdAt: serverTimestamp(),
         });
       }
       setModalVisible(false);
@@ -186,7 +186,7 @@ export default function HabitsScreen() {
   // ── Progress stats ────────────────────────────────────────────────────────
 
   const completedToday = habits.filter(h => h.completedDates?.includes(TODAY)).length;
-  const progressPct    = habits.length ? (completedToday / habits.length) * 100 : 0;
+  const progressPct = habits.length ? (completedToday / habits.length) * 100 : 0;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -194,14 +194,18 @@ export default function HabitsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
 
       {/* ── Header progress banner ───────────────────────────────────── */}
-      <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.header}>
-        <Text style={styles.headerTitle}>Today's Habits</Text>
-        <Text style={styles.headerSub}>
+      <LinearGradient
+        colors={isDark ? GRADIENTS.headerDark : GRADIENTS.headerLight}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.textOnPrimary }]}>Today's Habits</Text>
+        <Text style={[styles.headerSub, { color: colors.textOnPrimary }]}>
           {completedToday} of {habits.length} completed
         </Text>
         {/* Progress bar */}
         <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+          <View style={[styles.progressBarFill, { width: `${progressPct}%`, backgroundColor: colors.accent }]} />
         </View>
       </LinearGradient>
 
@@ -224,14 +228,14 @@ export default function HabitsScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item: habit }) => {
             const isCompletedToday = habit.completedDates?.includes(TODAY);
-            const streak           = calculateStreak(habit.completedDates ?? []);
+            const streak = calculateStreak(habit.completedDates ?? []);
 
             return (
               <TouchableOpacity
                 style={[styles.habitCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onLongPress={() => {
                   Alert.alert(habit.name, 'What would you like to do?', [
-                    { text: 'Edit',   onPress: () => openEdit(habit) },
+                    { text: 'Edit', onPress: () => openEdit(habit) },
                     { text: 'Delete', onPress: () => { setDeleteTarget(habit); setConfirmVisible(true); }, style: 'destructive' },
                     { text: 'Cancel', style: 'cancel' },
                   ]);
@@ -248,7 +252,7 @@ export default function HabitsScreen() {
 
                   {/* Last 7 days progress dots */}
                   <View style={styles.weekRow}>
-                    {last7Days.map((day, i) => {
+                    {last7Days.map(day => {
                       const done = habit.completedDates?.includes(day);
                       const isTodayDay = day === TODAY;
                       return (
@@ -311,7 +315,7 @@ export default function HabitsScreen() {
           {/* Color picker */}
           <Text style={[styles.colorLabel, { color: colors.textSecondary }]}>Choose color:</Text>
           <View style={styles.colorRow}>
-            {HABIT_COLORS.map(({ color, label }) => (
+            {HABIT_COLORS.map(({ color }) => (
               <TouchableOpacity
                 key={color}
                 onPress={() => setHabitColor(color)}
@@ -361,46 +365,52 @@ const styles = StyleSheet.create({
 
   // Header banner
   header: {
-    padding:    SPACING[5],
+    padding: SPACING[5],
     paddingTop: SPACING[6],
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
-  headerTitle: { fontSize: FONT_SIZE['2xl'], fontWeight: FONT_WEIGHT.bold, color: '#FFFFFF' },
-  headerSub:   { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.6)', marginTop: SPACING[1], marginBottom: SPACING[3] },
+  headerTitle: { fontSize: FONT_SIZE['2xl'], fontWeight: FONT_WEIGHT.bold },
+  headerSub: { fontSize: FONT_SIZE.sm, opacity: 0.8, marginTop: SPACING[1], marginBottom: SPACING[3] },
   progressBarBg: {
     height: 8, borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
   },
   progressBarFill: {
     height: 8, borderRadius: RADIUS.full,
-    backgroundColor: '#7C3AED',
   },
 
   // Habits list
   listContent: { padding: SPACING[4], paddingBottom: 100 },
 
   habitCard: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    borderRadius:   RADIUS.lg,
-    borderWidth:    1,
-    marginBottom:   SPACING[3],
-    overflow:       'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: SPACING[3],
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  colorBar:  { width: 5, alignSelf: 'stretch' },
+  colorBar: { width: 5, alignSelf: 'stretch' },
   habitInfo: { flex: 1, padding: SPACING[4] },
   habitName: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACING[1] },
   habitStreak: { fontSize: FONT_SIZE.sm, marginBottom: SPACING[2] },
 
   // Week dots
-  weekRow:   { flexDirection: 'row', gap: SPACING[2] },
+  weekRow: { flexDirection: 'row', gap: SPACING[2] },
   dayDotWrap: { alignItems: 'center', gap: 3 },
   dayDot: { width: 18, height: 18, borderRadius: 9 },
   dayLabel: { fontSize: 9, fontWeight: FONT_WEIGHT.medium },
 
   // Check button
-  checkBtn:   { padding: SPACING[4] },
+  checkBtn: { padding: SPACING[4] },
   checkCircle: {
-    width:  36, height: 36, borderRadius: 18,
+    width: 36, height: 36, borderRadius: 18,
     borderWidth: 2,
     justifyContent: 'center', alignItems: 'center',
   },
@@ -412,15 +422,15 @@ const styles = StyleSheet.create({
     padding: SPACING[6], paddingBottom: SPACING[10], elevation: 10,
   },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: SPACING[4] },
-  sheetTitle:  { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING[4] },
+  sheetTitle: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING[4] },
   input: {
     borderRadius: RADIUS.md, borderWidth: 1,
     paddingHorizontal: SPACING[4], paddingVertical: SPACING[3],
     fontSize: FONT_SIZE.base, marginBottom: SPACING[4],
   },
   colorLabel: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, marginBottom: SPACING[2] },
-  colorRow:   { flexDirection: 'row', gap: SPACING[3], marginBottom: SPACING[5] },
-  colorDot:   { width: 32, height: 32, borderRadius: 16 },
+  colorRow: { flexDirection: 'row', gap: SPACING[3], marginBottom: SPACING[5] },
+  colorDot: { width: 32, height: 32, borderRadius: 16 },
 
   modalBtns: { flexDirection: 'row', gap: SPACING[3] },
   cancelBtn: {

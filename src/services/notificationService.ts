@@ -24,10 +24,7 @@ import notifee, {
 import {
   getMessaging,
   onMessage,
-  getToken,
   onNotificationOpenedApp,
-  getInitialNotification,
-  setBackgroundMessageHandler,
   RemoteMessage,
 } from '@react-native-firebase/messaging';
 

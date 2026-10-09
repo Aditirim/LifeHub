@@ -39,7 +39,7 @@ type NavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 export default function LoginScreen() {
   const navigation = useNavigation<NavProp>();
   const { signIn } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   // Form state
   const [email,        setEmail]        = useState('');
@@ -84,7 +84,7 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient
-      colors={['#0D0D1A', '#1A1A2E', '#16213E']}
+      colors={isDark ? GRADIENTS.authDark : GRADIENTS.authLight}
       style={styles.gradient}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -99,56 +99,56 @@ export default function LoginScreen() {
             <LinearGradient
               colors={GRADIENTS.primary}
               style={styles.logoIcon}>
-              <Icon name="lightning-bolt" size={36} color="#FFFFFF" />
+              <Icon name="lightning-bolt" size={36} color={colors.textOnPrimary} />
             </LinearGradient>
-            <Text style={styles.appName}>LifeHub</Text>
-            <Text style={styles.tagline}>Your personal daily dashboard</Text>
+            <Text style={[styles.appName, { color: colors.text }]}>LifeHub</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>Your personal daily dashboard</Text>
           </View>
 
           {/* ── Card ─────────────────────────────────────────────────────── */}
-          <View style={[styles.card, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)' }]}>
-            <Text style={styles.cardTitle}>Welcome back</Text>
-            <Text style={[styles.cardSubtitle, { color: 'rgba(255,255,255,0.55)' }]}>
+          <View style={[styles.card, { backgroundColor: isDark ? 'rgba(30,48,40,0.7)' : 'rgba(255,255,255,0.9)', borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Welcome back</Text>
+            <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
               Sign in to continue
             </Text>
 
             {/* Email input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
               <View style={[
                 styles.inputWrap,
-                { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: errors.email ? '#EF4444' : 'rgba(255,255,255,0.15)' },
+                { backgroundColor: isDark ? 'rgba(17,26,21,0.65)' : 'rgba(237,244,242,0.8)', borderColor: errors.email ? colors.error : colors.border },
               ]}>
-                <Icon name="email-outline" size={20} color="rgba(255,255,255,0.5)" style={styles.inputIcon} />
+                <Icon name="email-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.text }]}
                   value={email}
                   onChangeText={t => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
                   placeholder="you@example.com"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
                 />
               </View>
-              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+              {errors.email ? <Text style={[styles.errorText, { color: colors.error }]}>{errors.email}</Text> : null}
             </View>
 
             {/* Password input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Password</Text>
               <View style={[
                 styles.inputWrap,
-                { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: errors.password ? '#EF4444' : 'rgba(255,255,255,0.15)' },
+                { backgroundColor: isDark ? 'rgba(17,26,21,0.65)' : 'rgba(237,244,242,0.8)', borderColor: errors.password ? colors.error : colors.border },
               ]}>
-                <Icon name="lock-outline" size={20} color="rgba(255,255,255,0.5)" style={styles.inputIcon} />
+                <Icon name="lock-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.text }]}
                   value={password}
                   onChangeText={t => { setPassword(t); setErrors(e => ({ ...e, password: undefined })); }}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPassword}
                   returnKeyType="done"
                   onSubmitEditing={handleLogin}
@@ -159,18 +159,18 @@ export default function LoginScreen() {
                   <Icon
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color="rgba(255,255,255,0.5)"
+                    color={colors.textMuted}
                   />
                 </TouchableOpacity>
               </View>
-              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+              {errors.password ? <Text style={[styles.errorText, { color: colors.error }]}>{errors.password}</Text> : null}
             </View>
 
             {/* Forgot password */}
             <TouchableOpacity
               onPress={() => navigation.navigate('ForgotPassword')}
               style={styles.forgotBtn}>
-              <Text style={styles.forgotText}>Forgot password?</Text>
+              <Text style={[styles.forgotText, { color: colors.primaryLight }]}>Forgot password?</Text>
             </TouchableOpacity>
 
             {/* Login button */}
@@ -184,17 +184,17 @@ export default function LoginScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.loginBtn}>
                 {loading
-                  ? <ActivityIndicator color="#FFFFFF" />
-                  : <Text style={styles.loginBtnText}>Sign In</Text>}
+                  ? <ActivityIndicator color={colors.textOnPrimary} />
+                  : <Text style={[styles.loginBtnText, { color: colors.textOnPrimary }]}>Sign In</Text>}
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
           {/* ── Register link ─────────────────────────────────────────────── */}
           <View style={styles.registerRow}>
-            <Text style={styles.registerPrompt}>Don't have an account? </Text>
+            <Text style={[styles.registerPrompt, { color: colors.textSecondary }]}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Sign Up</Text>
+              <Text style={[styles.registerLink, { color: colors.primaryLight }]}>Sign Up</Text>
             </TouchableOpacity>
           </View>
 
@@ -266,7 +266,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize:     FONT_SIZE.sm,
     fontWeight:   FONT_WEIGHT.semibold,
-    color:        'rgba(255,255,255,0.7)',
     marginBottom: SPACING[2],
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -285,14 +284,12 @@ const styles = StyleSheet.create({
   input: {
     flex:      1,
     fontSize:  FONT_SIZE.base,
-    color:     '#FFFFFF',
     height:    52,
   },
   eyeBtn: {
     padding: SPACING[1],
   },
   errorText: {
-    color:     '#EF4444',
     fontSize:  FONT_SIZE.sm,
     marginTop: SPACING[1],
   },
@@ -304,7 +301,6 @@ const styles = StyleSheet.create({
     marginTop:     -SPACING[2],
   },
   forgotText: {
-    color:      '#A78BFA',
     fontSize:   FONT_SIZE.sm,
     fontWeight: FONT_WEIGHT.medium,
   },
@@ -319,7 +315,6 @@ const styles = StyleSheet.create({
   loginBtnText: {
     fontSize:   FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
-    color:      '#FFFFFF',
     letterSpacing: 0.5,
   },
 
@@ -330,11 +325,9 @@ const styles = StyleSheet.create({
     alignItems:     'center',
   },
   registerPrompt: {
-    color:    'rgba(255,255,255,0.5)',
     fontSize: FONT_SIZE.base,
   },
   registerLink: {
-    color:      '#A78BFA',
     fontSize:   FONT_SIZE.base,
     fontWeight: FONT_WEIGHT.bold,
   },

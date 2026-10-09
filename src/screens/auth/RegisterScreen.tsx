@@ -27,6 +27,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { AuthStackParamList } from '../../navigation/types';
 import { isValidEmail, isValidPassword, isNotEmpty } from '../../utils/validators';
 import { SPACING, RADIUS } from '../../constants/spacing';
@@ -38,6 +39,7 @@ type NavProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 export default function RegisterScreen() {
   const navigation = useNavigation<NavProp>();
   const { register } = useAuth();
+  const { colors, isDark } = useTheme();
 
   const [name,           setName]           = useState('');
   const [email,          setEmail]          = useState('');
@@ -81,7 +83,7 @@ export default function RegisterScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <LinearGradient colors={['#0D0D1A', '#1A1A2E', '#16213E']} style={styles.gradient}>
+    <LinearGradient colors={isDark ? GRADIENTS.authDark : GRADIENTS.authLight} style={styles.gradient}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -89,16 +91,18 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}>
 
           {/* ── Back button ───────────────────────────────────────────────── */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Icon name="arrow-left" size={24} color="rgba(255,255,255,0.7)" />
+          <TouchableOpacity
+            style={[styles.backBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
+            onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={24} color={colors.text} />
           </TouchableOpacity>
 
           {/* ── Header ───────────────────────────────────────────────────── */}
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join LifeHub and organize your life</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Join LifeHub and organize your life</Text>
 
           {/* ── Form card ─────────────────────────────────────────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: isDark ? 'rgba(30,48,40,0.7)' : 'rgba(255,255,255,0.9)', borderColor: colors.border }]}>
             {/* Name */}
             {renderInput({
               label: 'Full Name', icon: 'account-outline', value: name,
@@ -140,17 +144,17 @@ export default function RegisterScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.btn}>
                 {loading
-                  ? <ActivityIndicator color="#FFFFFF" />
-                  : <Text style={styles.btnText}>Create Account</Text>}
+                  ? <ActivityIndicator color={colors.textOnPrimary} />
+                  : <Text style={[styles.btnText, { color: colors.textOnPrimary }]}>Create Account</Text>}
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
           {/* ── Login link ────────────────────────────────────────────────── */}
           <View style={styles.loginRow}>
-            <Text style={styles.loginPrompt}>Already have an account? </Text>
+            <Text style={[styles.loginPrompt, { color: colors.textSecondary }]}>Already have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginLink}>Sign In</Text>
+              <Text style={[styles.loginLink, { color: colors.primaryLight }]}>Sign In</Text>
             </TouchableOpacity>
           </View>
 
@@ -171,18 +175,21 @@ export default function RegisterScreen() {
   }) {
     return (
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>{opts.label}</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{opts.label}</Text>
         <View style={[
           styles.inputWrap,
-          { borderColor: opts.error ? '#EF4444' : 'rgba(255,255,255,0.15)' },
+          {
+            backgroundColor: isDark ? 'rgba(17,26,21,0.65)' : 'rgba(237,244,242,0.8)',
+            borderColor: opts.error ? colors.error : colors.border,
+          },
         ]}>
-          <Icon name={opts.icon} size={20} color="rgba(255,255,255,0.5)" style={styles.inputIcon} />
+          <Icon name={opts.icon} size={20} color={colors.textMuted} style={styles.inputIcon} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: colors.text }]}
             value={opts.value}
             onChangeText={opts.onChangeText}
             placeholder={opts.placeholder}
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor={colors.textMuted}
             secureTextEntry={opts.secureTextEntry}
             keyboardType={opts.keyboardType}
             autoCapitalize={opts.autoCapitalize ?? 'words'}
@@ -190,11 +197,11 @@ export default function RegisterScreen() {
           />
           {opts.rightIcon && opts.onRightIcon ? (
             <TouchableOpacity onPress={opts.onRightIcon} style={styles.eyeBtn}>
-              <Icon name={opts.rightIcon} size={20} color="rgba(255,255,255,0.5)" />
+              <Icon name={opts.rightIcon} size={20} color={colors.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
-        {opts.error ? <Text style={styles.errorText}>{opts.error}</Text> : null}
+        {opts.error ? <Text style={[styles.errorText, { color: colors.error }]}>{opts.error}</Text> : null}
       </View>
     );
   }
@@ -212,7 +219,6 @@ const styles = StyleSheet.create({
     width:          44,
     height:         44,
     borderRadius:   22,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems:     'center',
     marginBottom:   SPACING[6],
@@ -220,19 +226,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize:     FONT_SIZE['3xl'],
     fontWeight:   FONT_WEIGHT.black,
-    color:        '#FFFFFF',
     marginBottom: SPACING[1],
   },
   subtitle: {
     fontSize:     FONT_SIZE.base,
-    color:        'rgba(255,255,255,0.5)',
     marginBottom: SPACING[6],
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius:    RADIUS['2xl'],
     borderWidth:     1,
-    borderColor:     'rgba(255,255,255,0.12)',
     padding:         SPACING[6],
     marginBottom:    SPACING[6],
   },
@@ -240,7 +242,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize:     FONT_SIZE.sm,
     fontWeight:   FONT_WEIGHT.semibold,
-    color:        'rgba(255,255,255,0.7)',
     marginBottom: SPACING[2],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -252,17 +253,15 @@ const styles = StyleSheet.create({
     borderWidth:       1,
     paddingHorizontal: SPACING[3],
     height:            52,
-    backgroundColor:   'rgba(255,255,255,0.08)',
   },
   inputIcon: { marginRight: SPACING[2] },
   input: {
     flex:     1,
     fontSize: FONT_SIZE.base,
-    color:    '#FFFFFF',
     height:   52,
   },
   eyeBtn:    { padding: SPACING[1] },
-  errorText: { color: '#EF4444', fontSize: FONT_SIZE.sm, marginTop: SPACING[1] },
+  errorText: { fontSize: FONT_SIZE.sm, marginTop: SPACING[1] },
   btn: {
     height:         54,
     borderRadius:   RADIUS.md,
@@ -273,7 +272,6 @@ const styles = StyleSheet.create({
   btnText: {
     fontSize:     FONT_SIZE.lg,
     fontWeight:   FONT_WEIGHT.bold,
-    color:        '#FFFFFF',
     letterSpacing: 0.5,
   },
   loginRow: {
@@ -282,6 +280,6 @@ const styles = StyleSheet.create({
     alignItems:     'center',
     paddingBottom:  SPACING[8],
   },
-  loginPrompt: { color: 'rgba(255,255,255,0.5)', fontSize: FONT_SIZE.base },
-  loginLink:   { color: '#A78BFA', fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
+  loginPrompt: { fontSize: FONT_SIZE.base },
+  loginLink:   { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
 });

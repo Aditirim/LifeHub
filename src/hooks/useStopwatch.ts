@@ -69,7 +69,7 @@ export function useStopwatch() {
 
   // ── Display loop ──────────────────────────────────────────────────────────
 
-  function startDisplayLoop(s: StopwatchState) {
+  function startDisplayLoop(_s?: StopwatchState) {
     clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
       setElapsed(getElapsed(stateRef.current));

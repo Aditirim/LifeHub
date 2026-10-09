@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView,
   StyleSheet, RefreshControl, Platform, PermissionsAndroid,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -37,7 +37,7 @@ type LocationState = 'idle' | 'requesting' | 'granted' | 'denied';
 export default function WeatherScreen() {
   const { colors } = useTheme();
 
-  const [locationState, setLocationState]     = useState<LocationState>('idle');
+  const [, setLocationState]                  = useState<LocationState>('idle');
   const [current,       setCurrent]           = useState<CurrentWeather | null>(null);
   const [forecast,      setForecast]          = useState<ForecastDay[]>([]);
   const [loading,       setLoading]           = useState(false);
@@ -64,7 +64,7 @@ export default function WeatherScreen() {
         .finally(() => { setLoading(false); setRefreshing(false); });
     };
 
-    const onError = (err: any) => {
+    const onError = () => {
       setError('Unable to get location. Please enable location permission.');
       setLocationState('denied');
       setLoading(false);
@@ -217,6 +217,8 @@ const styles = StyleSheet.create({
     alignItems:  'center',
     paddingTop:  SPACING[8],
     paddingBottom: SPACING[6],
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
   cityName:    { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.semibold, color: 'rgba(255,255,255,0.9)' },
   temperature: { fontSize: FONT_SIZE['5xl'], fontWeight: FONT_WEIGHT.black, color: '#FFFFFF', marginTop: -SPACING[2] },

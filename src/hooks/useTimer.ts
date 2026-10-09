@@ -51,6 +51,32 @@ export function useTimer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const stateRef    = useRef<TimerState>(INITIAL);
 
+  // ── Internal helpers ──────────────────────────────────────────────────────
+
+  const applyState = useCallback((s: TimerState) => {
+    stateRef.current = s;
+    setState(s);
+    setRemaining(getRemaining(s));
+    AsyncStorage.setItem(TIMER_KEY, JSON.stringify(s)).catch(() => {});
+  }, []);
+
+  const startDisplayLoop = useCallback(() => {
+    clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      const s = stateRef.current;
+      if (s.status !== 'running') {
+        clearInterval(intervalRef.current);
+        return;
+      }
+      const rem = Math.max(0, s.targetTimestamp - Date.now());
+      setRemaining(rem);
+      if (rem <= 0) {
+        clearInterval(intervalRef.current);
+        applyState({ ...s, status: 'done' });
+      }
+    }, 500);
+  }, [applyState]);
+
   // ── Load persisted state ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -73,33 +99,7 @@ export function useTimer() {
       } catch {}
     });
     return () => clearInterval(intervalRef.current);
-  }, []);
-
-  // ── Internal helpers ──────────────────────────────────────────────────────
-
-  function applyState(s: TimerState) {
-    stateRef.current = s;
-    setState(s);
-    setRemaining(getRemaining(s));
-    AsyncStorage.setItem(TIMER_KEY, JSON.stringify(s)).catch(() => {});
-  }
-
-  function startDisplayLoop() {
-    clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      const s = stateRef.current;
-      if (s.status !== 'running') {
-        clearInterval(intervalRef.current);
-        return;
-      }
-      const rem = Math.max(0, s.targetTimestamp - Date.now());
-      setRemaining(rem);
-      if (rem <= 0) {
-        clearInterval(intervalRef.current);
-        applyState({ ...s, status: 'done' });
-      }
-    }, 500);
-  }
+  }, [applyState, startDisplayLoop]);
 
   // ── Controls ──────────────────────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ export function useTimer() {
     };
     applyState(s);
     startDisplayLoop();
-  }, []);
+  }, [applyState, startDisplayLoop]);
 
   const pause = useCallback(async () => {
     clearInterval(intervalRef.current);
@@ -135,7 +135,7 @@ export function useTimer() {
       await cancelTimer(stateRef.current.nativeTimerId).catch(() => {});
     }
     applyState({ ...stateRef.current, status: 'paused', remainingMsAtPause: rem, nativeTimerId: '' });
-  }, []);
+  }, [applyState]);
 
   const resume = useCallback(async () => {
     if (stateRef.current.status !== 'paused') return;
@@ -144,7 +144,7 @@ export function useTimer() {
     const nativeTimerId   = await scheduleTimer(rem, stateRef.current.label).catch(() => '');
     applyState({ ...stateRef.current, status: 'running', targetTimestamp, nativeTimerId });
     startDisplayLoop();
-  }, []);
+  }, [applyState, startDisplayLoop]);
 
   const reset = useCallback(async () => {
     clearInterval(intervalRef.current);
@@ -152,7 +152,7 @@ export function useTimer() {
       await cancelTimer(stateRef.current.nativeTimerId).catch(() => {});
     }
     applyState(INITIAL);
-  }, []);
+  }, [applyState]);
 
   const progress = state.totalMs > 0 ? remaining / state.totalMs : 0;
 

@@ -14,7 +14,6 @@ import {
   Modal,
   StyleSheet,
   ViewStyle,
-  TextStyle,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -43,7 +42,11 @@ export function Card({ children, style, gradient, onPress, noPadding }: CardProp
     <View
       style={[
         styles.card,
-        { backgroundColor: gradient ? 'transparent' : colors.card, borderColor: colors.border },
+        {
+          backgroundColor: gradient ? 'transparent' : colors.card,
+          borderColor: colors.border,
+          shadowColor: colors.shadow,
+        },
         noPadding ? {} : { padding: SPACING[4] },
         style,
       ]}>
@@ -309,9 +312,13 @@ export function FAB({ iconName, onPress, style, color }: FABProps) {
 const styles = StyleSheet.create({
   // Card
   card: {
-    borderRadius:  RADIUS.lg,
+    borderRadius:  RADIUS.xl,
     borderWidth:   1,
     overflow:      'hidden',
+    elevation:     2,
+    shadowOffset:  { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius:  6,
   },
 
   // Loading / Empty / Error (centered container)

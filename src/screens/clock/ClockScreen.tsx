@@ -21,10 +21,10 @@ import { format } from 'date-fns';
 
 import { useTheme } from '../../context/ThemeContext';
 import { SPACING, RADIUS } from '../../constants/spacing';
-import { FONT_SIZE, FONT_WEIGHT } from '../../constants/typography';
+import { FONT_SIZE } from '../../constants/typography';
 import { ConfirmDialog } from '../../components';
 import { MainStackParamList } from '../../navigation/types';
-import { useAlarms, DEFAULT_ALARM_SETTINGS } from '../../hooks/useAlarms';
+import { useAlarms } from '../../hooks/useAlarms';
 import { useStopwatch } from '../../hooks/useStopwatch';
 import { useTimer } from '../../hooks/useTimer';
 import { Alarm, repeatDaysLabel, getRingtoneLabel } from '../../native/AlarmModule';
@@ -46,7 +46,7 @@ const SETTINGS_KEY = '@lifehub_alarm_settings';
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function ClockScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<ClockTab>('clock');
   const [use24Hour, setUse24Hour] = useState(false);
 
@@ -71,18 +71,18 @@ export default function ClockScreen() {
             <Icon
               name={TAB_ICONS[tab]}
               size={16}
-              color={activeTab === tab ? '#FFF' : colors.textSecondary}
+              color={activeTab === tab ? colors.textOnPrimary : colors.textSecondary}
             />
-            <Text style={[styles.tabLabel, { color: activeTab === tab ? '#FFF' : colors.textSecondary }]}>
+            <Text style={[styles.tabLabel, { color: activeTab === tab ? colors.textOnPrimary : colors.textSecondary }]}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {activeTab === 'clock' && <ClockTabView colors={colors} use24Hour={use24Hour} />}
-      {activeTab === 'stopwatch' && <StopwatchTabView colors={colors} />}
-      {activeTab === 'timer' && <TimerTabView colors={colors} />}
+      {activeTab === 'clock' && <ClockTabView colors={colors} use24Hour={use24Hour} isDark={isDark} />}
+      {activeTab === 'stopwatch' && <StopwatchTabView colors={colors} isDark={isDark} />}
+      {activeTab === 'timer' && <TimerTabView colors={colors} isDark={isDark} />}
       {activeTab === 'alarms' && <AlarmsTabView colors={colors} use24Hour={use24Hour} />}
     </View>
   );
@@ -92,7 +92,7 @@ export default function ClockScreen() {
 // CLOCK TAB
 // ══════════════════════════════════════════════════════════════════════════════
 
-function ClockTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean }) {
+function ClockTabView({ colors, use24Hour, isDark }: { colors: any; use24Hour: boolean; isDark: boolean }) {
   const [now, setNow] = useState(new Date());
   const [showSeconds, setShowSeconds] = useState(true);
 
@@ -106,26 +106,32 @@ function ClockTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean }
     : (showSeconds ? 'hh:mm:ss' : 'hh:mm');
 
   return (
-    <LinearGradient colors={['#0D0D1A', '#1A1A2E']} style={styles.fullCenter}>
+    <LinearGradient
+      colors={isDark ? ['#111A15', '#1E3028'] : ['#EDF4F2', '#D8E8E2']}
+      style={styles.fullCenter}>
       {/* AM/PM badge */}
       {!use24Hour && (
-        <View style={[styles.ampmBadge, { backgroundColor: 'rgba(124,58,237,0.25)' }]}>
-          <Text style={styles.ampmText}>{format(now, 'a')}</Text>
+        <View style={[styles.ampmBadge, { backgroundColor: isDark ? 'rgba(124,131,99,0.25)' : 'rgba(49,71,58,0.12)' }]}>
+          <Text style={[styles.ampmText, { color: isDark ? colors.accent : colors.primary }]}>
+            {format(now, 'a')}
+          </Text>
         </View>
       )}
 
       {/* Digital clock */}
-      <Text style={styles.digitalClock}>{format(now, timeFormat)}</Text>
+      <Text style={[styles.digitalClock, { color: isDark ? '#FFFFFF' : colors.text }]}>
+        {format(now, timeFormat)}
+      </Text>
 
-      <Text style={[styles.clockDate, { color: 'rgba(255,255,255,0.55)' }]}>
+      <Text style={[styles.clockDate, { color: isDark ? 'rgba(255,255,255,0.65)' : colors.textSecondary }]}>
         {format(now, 'EEEE, MMMM d, yyyy')}
       </Text>
 
       {/* Seconds toggle */}
       <TouchableOpacity
         onPress={() => setShowSeconds(v => !v)}
-        style={[styles.secondsToggle, { backgroundColor: 'rgba(124,58,237,0.15)' }]}>
-        <Text style={{ color: '#A78BFA', fontSize: FONT_SIZE.sm }}>
+        style={[styles.secondsToggle, { backgroundColor: isDark ? 'rgba(124,131,99,0.18)' : 'rgba(49,71,58,0.1)' }]}>
+        <Text style={{ color: isDark ? colors.accent : colors.primary, fontSize: FONT_SIZE.sm, fontWeight: '600' }}>
           {showSeconds ? 'Hide seconds' : 'Show seconds'}
         </Text>
       </TouchableOpacity>
@@ -137,7 +143,7 @@ function ClockTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean }
 // STOPWATCH TAB
 // ══════════════════════════════════════════════════════════════════════════════
 
-function StopwatchTabView({ colors }: { colors: any }) {
+function StopwatchTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
   const { elapsed, running, laps, start, pause, reset, lap } = useStopwatch();
 
   // Calculate lap deltas
@@ -150,10 +156,12 @@ function StopwatchTabView({ colors }: { colors: any }) {
   return (
     <ScrollView contentContainerStyle={styles.centered}>
       {/* Circular display */}
-      <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.circleDisplay}>
+      <LinearGradient
+        colors={isDark ? ['#1E3028', '#111A15'] : ['#31473A', '#243528']}
+        style={styles.circleDisplay}>
         <Text style={styles.stopwatchTime}>{formatStopwatch(elapsed)}</Text>
         {laps.length > 0 && (
-          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: FONT_SIZE.sm, marginTop: 4 }}>
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: FONT_SIZE.sm, marginTop: 4 }}>
             Lap {laps.length + 1}
           </Text>
         )}
@@ -171,7 +179,7 @@ function StopwatchTabView({ colors }: { colors: any }) {
 
         <TouchableOpacity
           onPress={running ? pause : start}
-          style={[styles.mainBtn, { backgroundColor: running ? '#EF4444' : '#10B981' }]}>
+          style={[styles.mainBtn, { backgroundColor: running ? colors.error : colors.success }]}>
           <Icon name={running ? 'pause' : 'play'} size={32} color="#FFF" />
         </TouchableOpacity>
 
@@ -191,7 +199,7 @@ function StopwatchTabView({ colors }: { colors: any }) {
             const delta = lapDeltas[i];
             const isFast = lapDeltas.length > 1 && delta === minDelta;
             const isSlow = lapDeltas.length > 1 && delta === maxDelta;
-            const rowColor = isFast ? '#10B981' : isSlow ? '#EF4444' : colors.text;
+            const rowColor = isFast ? colors.success : isSlow ? colors.error : colors.text;
             return (
               <View key={i} style={[styles.lapRow, { borderColor: colors.border }]}>
                 <Text style={[styles.lapLabel, { color: rowColor }]}>Lap {i + 1}</Text>
@@ -226,10 +234,10 @@ const TIMER_PRESETS = [
   { label: '2h', ms: 7_200_000 },
 ];
 
-import { TextInput, KeyboardAvoidingView } from 'react-native';
+import { TextInput } from 'react-native';
 
-function TimerTabView({ colors }: { colors: any }) {
-  const { status, remaining, totalMs, progress, start, pause, resume, reset } = useTimer();
+function TimerTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
+  const { status, remaining, progress, start, pause, resume, reset } = useTimer();
   const [inputMins, setInputMins] = useState('05');
   const [inputSecs, setInputSecs] = useState('00');
   const [timerLabel, setTimerLabel] = useState('');
@@ -241,7 +249,7 @@ function TimerTabView({ colors }: { colors: any }) {
       duration: 500,
       useNativeDriver: false,
     }).start();
-  }, [progress]);
+  }, [progress, progressAnim]);
 
   const isIdle = status === 'idle';
   const isDone = status === 'done';
@@ -294,15 +302,17 @@ function TimerTabView({ colors }: { colors: any }) {
     <ScrollView contentContainerStyle={[styles.centered, { paddingBottom: 24 }]} keyboardShouldPersistTaps="handled">
       {/* Timer ring */}
       <View style={styles.timerRingContainer}>
-        <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.timerCircle}>
+        <LinearGradient
+          colors={isDark ? ['#1E3028', '#111A15'] : ['#31473A', '#243528']}
+          style={styles.timerCircle}>
           <Text style={styles.timerRemaining}>{displayStr}</Text>
           {!isIdle && !isDone && (
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: FONT_SIZE.sm }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: FONT_SIZE.sm }}>
               {Math.round(progress * 100)}%
             </Text>
           )}
           {isDone && (
-            <Text style={{ color: '#10B981', fontSize: FONT_SIZE.base, fontWeight: '600' }}>
+            <Text style={{ color: colors.success, fontSize: FONT_SIZE.base, fontWeight: '600' }}>
               Done! ✓
             </Text>
           )}
@@ -402,7 +412,7 @@ function TimerTabView({ colors }: { colors: any }) {
 
         <TouchableOpacity
           onPress={isRunning ? pause : isPaused ? resume : isDone ? reset : handleStart}
-          style={[styles.mainBtn, { backgroundColor: isRunning ? '#EF4444' : colors.primary }]}>
+          style={[styles.mainBtn, { backgroundColor: isRunning ? colors.error : colors.primary }]}>
           <Icon
             name={isRunning ? 'pause' : isDone ? 'refresh' : 'play'}
             size={32}
@@ -421,11 +431,6 @@ function TimerTabView({ colors }: { colors: any }) {
       )}
     </ScrollView>
   );
-}
-
-function useTimerLabel(_status: string) {
-  // Thin helper — just prevents hook rules violation
-  return '';
 }
 
 
@@ -611,7 +616,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING[3], paddingHorizontal: SPACING[5],
     paddingVertical: SPACING[1], borderRadius: RADIUS.full,
   },
-  ampmText: { fontSize: FONT_SIZE.base, fontWeight: '700', color: '#A78BFA' },
+  ampmText: { fontSize: FONT_SIZE.base, fontWeight: '700' },
   secondsToggle: {
     marginTop: SPACING[6], paddingHorizontal: SPACING[5],
     paddingVertical: SPACING[2], borderRadius: RADIUS.full,

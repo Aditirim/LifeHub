@@ -21,10 +21,24 @@ import HabitsScreen from '../screens/habits/HabitsScreen';
 import MoneyScreen from '../screens/money/MoneyScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 
+const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
+  Home:     { active: 'home',           inactive: 'home-outline' },
+  Calendar: { active: 'calendar-month', inactive: 'calendar-month-outline' },
+  Habits:   { active: 'check-circle',   inactive: 'check-circle-outline' },
+  Money:    { active: 'wallet',          inactive: 'wallet-outline' },
+  Profile:  { active: 'account-circle', inactive: 'account-circle-outline' },
+};
+
+function renderTabBarIcon(routeName: string, focused: boolean, color: string, size: number) {
+  const iconSet = TAB_ICONS[routeName] ?? { active: 'circle', inactive: 'circle-outline' };
+  const iconName = focused ? iconSet.active : iconSet.inactive;
+  return <Icon name={iconName} size={size} color={color} />;
+}
+
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 export default function BottomTabNavigator() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <Tab.Navigator
@@ -33,19 +47,7 @@ export default function BottomTabNavigator() {
         headerShown: false,
 
         // ── Tab bar icon ─────────────────────────────────────────────────────
-        tabBarIcon: ({ focused, color, size }) => {
-          // Map each tab name to an icon (filled when focused, outlined otherwise)
-          const icons: Record<string, { active: string; inactive: string }> = {
-            Home:     { active: 'home',           inactive: 'home-outline' },
-            Calendar: { active: 'calendar-month', inactive: 'calendar-month-outline' },
-            Habits:   { active: 'check-circle',   inactive: 'check-circle-outline' },
-            Money:    { active: 'wallet',          inactive: 'wallet-outline' },
-            Profile:  { active: 'account-circle', inactive: 'account-circle-outline' },
-          };
-          const iconSet = icons[route.name] ?? { active: 'circle', inactive: 'circle-outline' };
-          const iconName = focused ? iconSet.active : iconSet.inactive;
-          return <Icon name={iconName} size={24} color={color} />;
-        },
+        tabBarIcon: ({ focused, color, size }) => renderTabBarIcon(route.name, focused, color, size),
 
         // ── Tab bar styling ──────────────────────────────────────────────────
         tabBarActiveTintColor:   colors.tabActive,

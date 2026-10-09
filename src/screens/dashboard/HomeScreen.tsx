@@ -152,8 +152,8 @@ export default function HomeScreen() {
   }
 
   const headerGradient: string[] = isDark
-    ? ['#111A15', '#1E3028', '#263D30']
-    : ['#31473A', '#3D5A46', '#243528'];
+    ? GRADIENTS.headerDark
+    : GRADIENTS.headerLight;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -231,33 +231,33 @@ export default function HomeScreen() {
         {/* Stats Row */}
         <View style={styles.statsRow}>
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card }]}
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Calendar' })}
             activeOpacity={0.8}>
-            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#1E2B4A' : '#EEF2FF' }]}>
-              <Icon name="calendar-today" size={20} color="#6366F1" />
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? 'rgba(90,138,158,0.2)' : 'rgba(58,96,128,0.14)' }]}>
+              <Icon name="calendar-today" size={20} color={colors.info} />
             </View>
             <Text style={[styles.statNumber, { color: colors.text }]}>{todayEvents.length}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Events</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card }]}
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Habits' })}
             activeOpacity={0.8}>
-            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#0E2B1E' : '#ECFDF5' }]}>
-              <Icon name="check-circle-outline" size={20} color="#10B981" />
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? 'rgba(90,158,114,0.2)' : 'rgba(58,122,88,0.14)' }]}>
+              <Icon name="check-circle-outline" size={20} color={colors.success} />
             </View>
             <Text style={[styles.statNumber, { color: colors.text }]}>{habitsCompletedToday}/{habits.length}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Habits</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.statCard, { backgroundColor: colors.card }]}
+            style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
             onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Money' })}
             activeOpacity={0.8}>
-            <View style={[styles.statIconCircle, { backgroundColor: isDark ? '#2A1020' : '#FFF1F2' }]}>
-              <Icon name="cash-minus" size={20} color="#F43F5E" />
+            <View style={[styles.statIconCircle, { backgroundColor: isDark ? 'rgba(194,107,92,0.2)' : 'rgba(168,64,64,0.14)' }]}>
+              <Icon name="cash-minus" size={20} color={colors.error} />
             </View>
             <Text style={[styles.statNumber, { color: colors.text }]}>{formatCurrency(todayExpenses)}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Spent</Text>
@@ -275,7 +275,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           {todayEvents.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.card }]}>
+            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
               <Icon name="calendar-check-outline" size={32} color={colors.textMuted} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No events today</Text>
@@ -284,7 +284,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             todayEvents.slice(0, 3).map((event) => (
-              <View key={event.id} style={[styles.eventItem, { backgroundColor: colors.card }]}>
+              <View key={event.id} style={[styles.eventItem, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
                 <View style={[styles.eventAccent, { backgroundColor: colors.primary }]} />
                 <View style={{ flex: 1, marginLeft: SPACING[3] }}>
                   <Text style={[styles.eventTitle, { color: colors.text }]} numberOfLines={1}>
@@ -310,7 +310,7 @@ export default function HomeScreen() {
               <Text style={[styles.seeAll, { color: colors.primaryLight }]}>See all →</Text>
             </TouchableOpacity>
           </View>
-          <View style={[styles.habitCard, { backgroundColor: colors.card }]}>
+          <View style={[styles.habitCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.habitCardTop}>
               <View>
                 <Text style={[styles.habitCount, { color: colors.text }]}>
@@ -323,7 +323,7 @@ export default function HomeScreen() {
                 styles.habitBadge,
                 { backgroundColor: habitProgress === 1 ? (isDark ? '#1A3325' : '#C8EDD8') : (isDark ? '#263D30' : '#D8EDE8') },
               ]}>
-                <Text style={[styles.habitBadgeText, { color: habitProgress === 1 ? '#5A9E72' : colors.primary }]}>
+                <Text style={[styles.habitBadgeText, { color: habitProgress === 1 ? colors.success : colors.primary }]}>
                   {habits.length > 0 ? `${Math.round(habitProgress * 100)}%` : '—'}
                 </Text>
               </View>

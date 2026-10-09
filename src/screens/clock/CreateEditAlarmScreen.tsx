@@ -15,7 +15,7 @@
  *  - Gradual volume toggle
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Switch, Alert, ActivityIndicator,
@@ -30,11 +30,11 @@ import { SPACING, RADIUS } from '../../constants/spacing';
 import { FONT_SIZE } from '../../constants/typography';
 import { MainStackParamList } from '../../navigation/types';
 import {
-  Alarm, AlarmInput, BUILTIN_RINGTONES, RingtoneType,
+  AlarmInput, BUILTIN_RINGTONES, RingtoneType,
   WEEKDAYS, WEEKENDS, EVERY_DAY, DAY_LABELS,
   previewRingtone, stopRingtonePreview,
 } from '../../native/AlarmModule';
-import { useAlarms, DEFAULT_ALARM_SETTINGS } from '../../hooks/useAlarms';
+import { useAlarms } from '../../hooks/useAlarms';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 

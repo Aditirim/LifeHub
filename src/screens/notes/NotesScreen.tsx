@@ -27,7 +27,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { notesCollection, db, serverTimestamp, toDate } from '../../services/firebase';
 import { SPACING, RADIUS } from '../../constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '../../constants/typography';
-import { GRADIENTS, CATEGORY_COLORS } from '../../constants/colors';
+import { NOTE_PALETTE } from '../../constants/colors';
 import { FAB, ConfirmDialog, EmptyState, LoadingSpinner } from '../../components';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -42,16 +42,12 @@ interface Note {
   updatedAt: any;
 }
 
-// Note card colors (a small palette)
-const NOTE_COLORS = [
-  '#1E2A48', '#1E3A2A', '#3A2A1E',
-  '#2A1E3A', '#1E3A3A', '#3A1E2A',
-];
-
 export default function NotesScreen() {
   const { user }   = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const uid        = user?.uid ?? '';
+
+  const currentPalette = isDark ? NOTE_PALETTE.dark : NOTE_PALETTE.light;
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [notes,       setNotes]       = useState<Note[]>([]);
@@ -63,7 +59,7 @@ export default function NotesScreen() {
   const [editNote,     setEditNote]     = useState<Note | null>(null);
   const [title,        setTitle]        = useState('');
   const [body,         setBody]         = useState('');
-  const [noteColor,    setNoteColor]    = useState(NOTE_COLORS[0]);
+  const [noteColor,    setNoteColor]    = useState(currentPalette[0]);
   const [saving,       setSaving]       = useState(false);
 
   // Delete confirm
@@ -109,7 +105,7 @@ export default function NotesScreen() {
     setEditNote(null);
     setTitle('');
     setBody('');
-    setNoteColor(NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]);
+    setNoteColor(currentPalette[Math.floor(Math.random() * currentPalette.length)]);
     setModalVisible(true);
   }
 
@@ -117,7 +113,7 @@ export default function NotesScreen() {
     setEditNote(note);
     setTitle(note.title);
     setBody(note.body);
-    setNoteColor(note.color ?? NOTE_COLORS[0]);
+    setNoteColor(note.color ?? currentPalette[0]);
     setModalVisible(true);
   }
 
@@ -216,7 +212,10 @@ export default function NotesScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item: note }) => (
             <TouchableOpacity
-              style={[styles.noteCard, { backgroundColor: note.color ?? colors.card, borderColor: colors.border }]}
+              style={[
+                styles.noteCard,
+                { backgroundColor: note.color ?? colors.card, borderColor: colors.border },
+              ]}
               onPress={() => openEdit(note)}
               onLongPress={() => {
                 Alert.alert(note.title || 'Note', 'What would you like to do?', [
@@ -229,17 +228,17 @@ export default function NotesScreen() {
               activeOpacity={0.85}>
               {/* Pin indicator */}
               {note.isPinned && (
-                <View style={styles.pinBadge}>
-                  <Icon name="pin" size={14} color="#FFFFFF" />
+                <View style={[styles.pinBadge, { backgroundColor: colors.primary }]}>
+                  <Icon name="pin" size={14} color={colors.textOnPrimary} />
                 </View>
               )}
               {note.title ? (
-                <Text style={styles.noteTitle} numberOfLines={2}>{note.title}</Text>
+                <Text style={[styles.noteTitle, { color: colors.text }]} numberOfLines={2}>{note.title}</Text>
               ) : null}
               {note.body ? (
-                <Text style={styles.noteBody} numberOfLines={6}>{note.body}</Text>
+                <Text style={[styles.noteBody, { color: colors.textSecondary }]} numberOfLines={6}>{note.body}</Text>
               ) : null}
-              <Text style={styles.noteDate}>
+              <Text style={[styles.noteDate, { color: colors.textMuted }]}>
                 {note.updatedAt ? format(toDate(note.updatedAt), 'MMM d') : ''}
               </Text>
             </TouchableOpacity>
@@ -262,21 +261,25 @@ export default function NotesScreen() {
           {/* Top bar */}
           <View style={styles.editorTopBar}>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.editorBtn}>
-              <Icon name="arrow-left" size={24} color="#FFFFFF" />
+              <Icon name="arrow-left" size={24} color={isDark ? '#FFFFFF' : colors.text} />
             </TouchableOpacity>
-            <Text style={styles.editorLabel}>{editNote ? 'Edit Note' : 'New Note'}</Text>
+            <Text style={[styles.editorLabel, { color: isDark ? '#FFFFFF' : colors.text }]}>{editNote ? 'Edit Note' : 'New Note'}</Text>
             <TouchableOpacity onPress={saveNote} style={styles.editorBtn} disabled={saving}>
-              <Text style={styles.editorSave}>{saving ? '...' : 'Save'}</Text>
+              <Text style={[styles.editorSave, { color: isDark ? colors.accent : colors.primary }]}>{saving ? '...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Color picker */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPicker}>
-            {NOTE_COLORS.map(c => (
+            {currentPalette.map(c => (
               <TouchableOpacity
                 key={c}
                 onPress={() => setNoteColor(c)}
-                style={[styles.colorDot, { backgroundColor: c }, noteColor === c && styles.colorDotSelected]}
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: c, borderColor: colors.border, borderWidth: 1 },
+                  noteColor === c && { borderWidth: 3, borderColor: colors.primary },
+                ]}
               />
             ))}
           </ScrollView>
@@ -284,17 +287,17 @@ export default function NotesScreen() {
           {/* Editor fields */}
           <ScrollView style={styles.editorScroll} keyboardShouldPersistTaps="handled">
             <TextInput
-              style={styles.titleInput}
+              style={[styles.titleInput, { color: isDark ? '#FFFFFF' : colors.text }]}
               placeholder="Title"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(30,45,36,0.4)'}
               value={title}
               onChangeText={setTitle}
               multiline
             />
             <TextInput
-              style={styles.bodyInput}
+              style={[styles.bodyInput, { color: isDark ? 'rgba(255,255,255,0.85)' : 'rgba(30,45,36,0.85)' }]}
               placeholder="Start writing..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(30,45,36,0.4)'}
               value={body}
               onChangeText={setBody}
               multiline
@@ -350,30 +353,31 @@ const styles = StyleSheet.create({
     marginBottom:  SPACING[3],
     minHeight:     120,
     position:      'relative',
+    elevation:     2,
+    shadowColor:   '#000',
+    shadowOffset:  { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius:  4,
   },
   pinBadge: {
     position:        'absolute',
     top:             SPACING[2],
     right:           SPACING[2],
-    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius:    RADIUS.full,
     padding:         4,
   },
   noteTitle: {
     fontSize:     FONT_SIZE.base,
     fontWeight:   FONT_WEIGHT.bold,
-    color:        '#FFFFFF',
     marginBottom: SPACING[2],
   },
   noteBody: {
-    fontSize:  FONT_SIZE.sm,
-    color:     'rgba(255,255,255,0.75)',
+    fontSize:   FONT_SIZE.sm,
     lineHeight: 18,
-    flex:      1,
+    flex:       1,
   },
   noteDate: {
     fontSize:  FONT_SIZE.xs,
-    color:     'rgba(255,255,255,0.45)',
     marginTop: SPACING[3],
   },
 

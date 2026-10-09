@@ -172,7 +172,7 @@ export default function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* ── Header / Avatar ──────────────────────────────────────── */}
-        <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.header}>
+        <LinearGradient colors={isDark ? GRADIENTS.headerDark : GRADIENTS.headerLight} style={styles.header}>
           <LinearGradient colors={GRADIENTS.primary} style={styles.avatar}>
             <Text style={styles.avatarInitials}>{initials}</Text>
           </LinearGradient>
@@ -181,9 +181,9 @@ export default function ProfileScreen() {
 
           {/* Account verified badge */}
           {user?.emailVerified && (
-            <View style={styles.verifiedBadge}>
-              <Icon name="check-circle" size={14} color="#10B981" />
-              <Text style={styles.verifiedText}>Verified Account</Text>
+            <View style={[styles.verifiedBadge, { backgroundColor: isDark ? 'rgba(90,158,114,0.18)' : 'rgba(255,255,255,0.15)' }]}>
+              <Icon name="check-circle" size={14} color={colors.success} />
+              <Text style={[styles.verifiedText, { color: colors.success }]}>Verified Account</Text>
             </View>
           )}
         </LinearGradient>
@@ -264,27 +264,33 @@ export default function ProfileScreen() {
 
         {/* ── Danger Zone ────────────────────────────────────── */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionLabel, styles.dangerSectionLabel]}>DANGER ZONE</Text>
+          <Text style={[styles.sectionLabel, { color: colors.error }]}>DANGER ZONE</Text>
           <TouchableOpacity
-            style={styles.deleteAccountBtn}
+            style={[
+              styles.deleteAccountBtn,
+              {
+                borderColor: colors.error,
+                backgroundColor: isDark ? 'rgba(194,107,92,0.08)' : 'rgba(168,64,64,0.06)',
+              },
+            ]}
             onPress={() => setDeleteConfirm(true)}
             disabled={deleting}
             accessibilityLabel="Delete Account"
             accessibilityRole="button">
             {deleting ? (
-              <ActivityIndicator size="small" color="#C26B5C" />
+              <ActivityIndicator size="small" color={colors.error} />
             ) : (
               <>
-                <View style={styles.deleteAccountIconWrap}>
+                <View style={[styles.deleteAccountIconWrap, { backgroundColor: isDark ? 'rgba(194,107,92,0.15)' : 'rgba(168,64,64,0.12)' }]}>
                   <Text style={styles.deleteAccountIcon}>⚠️</Text>
                 </View>
                 <View style={styles.deleteAccountTextWrap}>
-                  <Text style={styles.deleteAccountLabel}>Delete Account</Text>
-                  <Text style={styles.deleteAccountSub}>
+                  <Text style={[styles.deleteAccountLabel, { color: colors.error }]}>Delete Account</Text>
+                  <Text style={[styles.deleteAccountSub, { color: colors.error }]}>
                     Permanently delete your account and all data
                   </Text>
                 </View>
-                <Text style={styles.deleteAccountChevron}>›</Text>
+                <Text style={[styles.deleteAccountChevron, { color: colors.error }]}>›</Text>
               </>
             )}
           </TouchableOpacity>
@@ -293,7 +299,13 @@ export default function ProfileScreen() {
         {/* ── Logout ──────────────────────────────────────────────── */}
         <View style={[styles.section, { marginTop: SPACING[4] }]}>
           <TouchableOpacity
-            style={[styles.logoutBtn, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: colors.error }]}
+            style={[
+              styles.logoutBtn,
+              {
+                backgroundColor: isDark ? 'rgba(194,107,92,0.08)' : 'rgba(168,64,64,0.06)',
+                borderColor: colors.error,
+              },
+            ]}
             onPress={() => setLogoutConfirm(true)}>
             <Icon name="logout" size={20} color={colors.error} />
             <Text style={[styles.logoutText, { color: colors.error }]}>Sign Out</Text>
@@ -371,7 +383,7 @@ export default function ProfileScreen() {
               styles.reauthInputWrap,
               {
                 backgroundColor: colors.card,
-                borderColor: reauthError ? '#C26B5C' : colors.border,
+                borderColor: reauthError ? colors.error : colors.border,
               },
             ]}>
               <TextInput
@@ -400,7 +412,7 @@ export default function ProfileScreen() {
 
             {/* Inline error */}
             {reauthError ? (
-              <Text style={styles.reauthErrorText}>{reauthError}</Text>
+              <Text style={[styles.reauthErrorText, { color: colors.error }]}>{reauthError}</Text>
             ) : null}
 
             {/* Buttons */}
@@ -420,7 +432,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.reauthBtn, styles.reauthDeleteBtn]}
+                style={[styles.reauthBtn, { backgroundColor: colors.error, borderColor: colors.error }]}
                 onPress={handleReauth}
                 disabled={reauthLoading}>
                 {reauthLoading
@@ -470,6 +482,8 @@ const styles = StyleSheet.create({
     padding:    SPACING[6],
     paddingTop: SPACING[8],
     alignItems: 'center',
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
   avatar: {
     width:          96,
@@ -499,12 +513,11 @@ const styles = StyleSheet.create({
     alignItems:     'center',
     marginTop:      SPACING[2],
     gap:            SPACING[1],
-    backgroundColor: 'rgba(16,185,129,0.15)',
     paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[1],
     borderRadius:   RADIUS.full,
   },
-  verifiedText: { fontSize: FONT_SIZE.sm, color: '#10B981', fontWeight: FONT_WEIGHT.medium },
+  verifiedText: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
 
   // Section
   section:      { paddingHorizontal: SPACING[4], marginTop: SPACING[5] },

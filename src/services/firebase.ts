@@ -20,8 +20,6 @@ import {
   Timestamp,
 } from '@react-native-firebase/firestore';
 
-import { getApp } from '@react-native-firebase/app';
-
 // ─── Firestore instance ──────────────────────────────────────────────────────
 
 /** The Firestore database instance. */

@@ -25,6 +25,14 @@ export const GRADIENTS = {
   dark: ['#1E2D24', '#111A15'] as string[],  // dark bg gradient
   darkCard: ['#243528', '#1A2820'] as string[],  // dark card gradient
   lightCard: ['#EDF4F2', '#D8EDE8'] as string[],  // light card gradient
+
+  // Screen header gradients
+  headerDark: ['#111A15', '#1E3028', '#263D30'] as string[],
+  headerLight: ['#31473A', '#3D5A46', '#243528'] as string[],
+
+  // Auth screen gradients
+  authDark: ['#111A15', '#1A2820', '#16251D'] as string[],
+  authLight: ['#EDF4F2', '#E1ECE8', '#D8EDE8'] as string[],
 };
 
 // ─── Theme Types ─────────────────────────────────────────────────────────────
@@ -160,15 +168,35 @@ export const CATEGORY_COLORS = [
 
 // Habit color palette
 export const HABIT_COLORS = [
-  { color: '#7C8363', label: 'Forest' },
+  { color: '#31473A', label: 'Forest' },
   { color: '#7C8363', label: 'Lichen' },
-  { color: '#7C8363', label: 'Fern' },
-  { color: '#7C8363', label: 'Slate' },
-  { color: '#7C8363', label: 'Earth' },
-  { color: '#7C8363', label: 'Rosewood' },
-  { color: '#7C8363', label: 'Dusk' },
+  { color: '#5A8A72', label: 'Fern' },
+  { color: '#3D6B6B', label: 'Slate' },
+  { color: '#7A6040', label: 'Earth' },
+  { color: '#7A4A50', label: 'Rosewood' },
+  { color: '#5A6890', label: 'Dusk' },
   { color: '#9A7A50', label: 'Sand' },
 ];
+
+// Note card color palettes (botanical paper and forest moss shades)
+export const NOTE_PALETTE = {
+  dark: [
+    '#1E3028', // forest moss
+    '#223832', // deep spruce
+    '#30281E', // warm umber
+    '#2E2228', // muted rosewood
+    '#1E2830', // slate blue
+    '#2A2E20', // olive lichen
+  ],
+  light: [
+    '#E2ECE8', // soft sage
+    '#E4EDE4', // pale fern
+    '#EFE8DE', // warm parchment
+    '#EFE2E4', // muted blossom
+    '#DEE8EE', // misty sky
+    '#EAEBD8', // pale lichen
+  ],
+};
 
 // Expense categories (unchanged — display strings, not colors)
 export const EXPENSE_CATEGORIES = [

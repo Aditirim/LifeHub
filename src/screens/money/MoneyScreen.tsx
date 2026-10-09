@@ -13,16 +13,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, Alert, FlatList, KeyboardAvoidingView, Platform,
+  Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  onSnapshot, addDoc, deleteDoc, doc, query, orderBy, where,
+  onSnapshot, addDoc, deleteDoc, doc, query, orderBy,
 } from '@react-native-firebase/firestore';
-import { transactionsCollection, db, serverTimestamp, toDate } from '../../services/firebase';
+import { transactionsCollection, db, serverTimestamp } from '../../services/firebase';
 import { SPACING, RADIUS } from '../../constants/spacing';
 import { FONT_SIZE, FONT_WEIGHT } from '../../constants/typography';
 import { GRADIENTS, EXPENSE_CATEGORIES, INCOME_CATEGORIES, CATEGORY_COLORS } from '../../constants/colors';
@@ -46,7 +46,7 @@ interface Transaction {
 
 export default function MoneyScreen() {
   const { user }   = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const uid        = user?.uid ?? '';
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -162,24 +162,28 @@ export default function MoneyScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* ── Balance header ───────────────────────────────────────── */}
-        <LinearGradient colors={GRADIENTS.primary} style={styles.header}>
-          <Text style={styles.balanceLabel}>Net Balance</Text>
-          <Text style={[styles.balance, { color: balance >= 0 ? '#FFFFFF' : '#FCA5A5' }]}>
+        <LinearGradient
+          colors={isDark ? GRADIENTS.headerDark : GRADIENTS.headerLight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}>
+          <Text style={[styles.balanceLabel, { color: colors.textOnPrimary }]}>Net Balance</Text>
+          <Text style={[styles.balance, { color: balance >= 0 ? colors.textOnPrimary : colors.error }]}>
             {formatCurrency(Math.abs(balance))}
             {balance < 0 ? ' (deficit)' : ''}
           </Text>
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryBox}>
-              <Icon name="arrow-down-circle" size={18} color="#86EFAC" />
-              <Text style={styles.summaryAmount}>{formatCurrency(totalIncome)}</Text>
-              <Text style={styles.summaryLabel}>Income</Text>
+              <Icon name="arrow-down-circle" size={18} color={colors.success} />
+              <Text style={[styles.summaryAmount, { color: colors.textOnPrimary }]}>{formatCurrency(totalIncome)}</Text>
+              <Text style={[styles.summaryLabel, { color: colors.textOnPrimary }]}>Income</Text>
             </View>
             <View style={[styles.summaryDivider]} />
             <View style={styles.summaryBox}>
-              <Icon name="arrow-up-circle" size={18} color="#FCA5A5" />
-              <Text style={styles.summaryAmount}>{formatCurrency(totalExpenses)}</Text>
-              <Text style={styles.summaryLabel}>Expenses</Text>
+              <Icon name="arrow-up-circle" size={18} color={colors.error} />
+              <Text style={[styles.summaryAmount, { color: colors.textOnPrimary }]}>{formatCurrency(totalExpenses)}</Text>
+              <Text style={[styles.summaryLabel, { color: colors.textOnPrimary }]}>Expenses</Text>
             </View>
           </View>
         </LinearGradient>
@@ -191,7 +195,7 @@ export default function MoneyScreen() {
             {categoryBreakdown.map(([cat, amt], i) => (
               <View key={cat} style={styles.catRow}>
                 <Text style={[styles.catName, { color: colors.text }]}>{cat}</Text>
-                <View style={styles.catBarBg}>
+                <View style={[styles.catBarBg, { backgroundColor: colors.border }]}>
                   <View style={[
                     styles.catBarFill,
                     {
@@ -235,7 +239,11 @@ export default function MoneyScreen() {
                 {/* Category icon */}
                 <View style={[
                   styles.txIcon,
-                  { backgroundColor: tx.type === 'income' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)' },
+                  {
+                    backgroundColor: tx.type === 'income'
+                      ? (isDark ? 'rgba(90,158,114,0.2)' : 'rgba(58,122,88,0.14)')
+                      : (isDark ? 'rgba(194,107,92,0.2)' : 'rgba(168,64,64,0.14)'),
+                  },
                 ]}>
                   <Icon
                     name={tx.type === 'income' ? 'arrow-down' : 'arrow-up'}
@@ -385,14 +393,16 @@ const styles = StyleSheet.create({
     padding:    SPACING[6],
     paddingTop: SPACING[8],
     alignItems: 'center',
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
-  balanceLabel: { fontSize: FONT_SIZE.sm, color: 'rgba(255,255,255,0.7)', letterSpacing: 1, textTransform: 'uppercase' },
-  balance:      { fontSize: FONT_SIZE['4xl'], fontWeight: FONT_WEIGHT.black, color: '#FFFFFF', marginVertical: SPACING[2] },
+  balanceLabel: { fontSize: FONT_SIZE.sm, letterSpacing: 1, textTransform: 'uppercase' },
+  balance:      { fontSize: FONT_SIZE['4xl'], fontWeight: FONT_WEIGHT.black, marginVertical: SPACING[2] },
   summaryRow:   { flexDirection: 'row', marginTop: SPACING[3], width: '100%', justifyContent: 'center' },
   summaryBox:   { flex: 1, alignItems: 'center', gap: SPACING[1] },
   summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: SPACING[4] },
-  summaryAmount: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: '#FFFFFF' },
-  summaryLabel:  { fontSize: FONT_SIZE.xs, color: 'rgba(255,255,255,0.6)' },
+  summaryAmount: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
+  summaryLabel:  { fontSize: FONT_SIZE.xs },
 
   // Section
   section:      { padding: SPACING[4], paddingBottom: SPACING[2] },
@@ -401,7 +411,7 @@ const styles = StyleSheet.create({
   // Category bars
   catRow:    { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING[3], gap: SPACING[2] },
   catName:   { fontSize: FONT_SIZE.sm, width: 90 },
-  catBarBg:  { flex: 1, height: 8, borderRadius: RADIUS.full, backgroundColor: 'rgba(128,128,128,0.2)' },
+  catBarBg:  { flex: 1, height: 8, borderRadius: RADIUS.full },
   catBarFill:{ height: 8, borderRadius: RADIUS.full },
   catAmt:    { fontSize: FONT_SIZE.sm, width: 70, textAlign: 'right' },
 
@@ -411,6 +421,11 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg, borderWidth: 1,
     padding: SPACING[4], marginBottom: SPACING[2],
     gap: SPACING[3],
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   txIcon: {
     width: 44, height: 44, borderRadius: 22,

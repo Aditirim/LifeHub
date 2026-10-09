@@ -82,10 +82,6 @@ function isAvailable(): boolean {
   return Platform.OS === 'android' && NativeAlarmModule != null;
 }
 
-function unavailable(): Promise<never> {
-  return Promise.reject(new Error('AlarmModule not available on this platform'));
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**

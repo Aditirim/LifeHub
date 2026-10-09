@@ -14,16 +14,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Modal, TextInput, Alert, FlatList,
+  StyleSheet, Modal, TextInput, Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  getDay, addMonths, subMonths, isSameDay, parseISO, isToday,
+  getDay, addMonths, subMonths, isSameDay, isToday,
 } from 'date-fns';
 import {
-  query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
+  query, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
 } from '@react-native-firebase/firestore';
 
 import { useAuth } from '../../context/AuthContext';
@@ -50,7 +50,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function CalendarScreen() {
   const { user }   = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const uid        = user?.uid ?? '';
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ export default function CalendarScreen() {
         await addDoc(eventsCollection(uid), { ...data, createdAt: serverTimestamp() });
       }
       setModalVisible(false);
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Failed to save event. Please try again.');
     } finally {
       setSaving(false);
@@ -177,13 +177,17 @@ export default function CalendarScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {/* ── Month navigation ──────────────────────────────────────── */}
-        <LinearGradient colors={['#16213E', '#0D0D1A']} style={styles.header}>
+        <LinearGradient
+          colors={isDark ? GRADIENTS.headerDark : GRADIENTS.headerLight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}>
           <TouchableOpacity onPress={() => setViewMonth(m => subMonths(m, 1))} style={styles.navBtn}>
-            <Icon name="chevron-left" size={28} color="#FFFFFF" />
+            <Icon name="chevron-left" size={28} color={colors.textOnPrimary} />
           </TouchableOpacity>
-          <Text style={styles.monthTitle}>{format(viewMonth, 'MMMM yyyy')}</Text>
+          <Text style={[styles.monthTitle, { color: colors.textOnPrimary }]}>{format(viewMonth, 'MMMM yyyy')}</Text>
           <TouchableOpacity onPress={() => setViewMonth(m => addMonths(m, 1))} style={styles.navBtn}>
-            <Icon name="chevron-right" size={28} color="#FFFFFF" />
+            <Icon name="chevron-right" size={28} color={colors.textOnPrimary} />
           </TouchableOpacity>
         </LinearGradient>
 
@@ -372,9 +376,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', padding: SPACING[4], paddingTop: SPACING[6],
+    borderBottomLeftRadius: RADIUS.xl, borderBottomRightRadius: RADIUS.xl,
   },
   navBtn:     { padding: SPACING[2] },
-  monthTitle: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: '#FFFFFF' },
+  monthTitle: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
 
   // Calendar
   weekRow:  { flexDirection: 'row', paddingVertical: SPACING[2] },
@@ -391,6 +396,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     borderRadius: RADIUS.lg, borderWidth: 1,
     marginBottom: SPACING[2], overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   eventTimeBar: { width: 4, alignSelf: 'stretch' },
   eventInfo:    { flex: 1, padding: SPACING[3] },

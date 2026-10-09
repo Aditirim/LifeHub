@@ -33,11 +33,12 @@ android {
             keyPassword 'android'
         }
 
+        
         release {
-            storeFile file('lifehub-upload-key.keystore')
-            storePassword project.findProperty("LIFEHUB_UPLOAD_STORE_PASSWORD") ?: ""
-            keyAlias "lifehub-upload"
-            keyPassword project.findProperty("LIFEHUB_UPLOAD_KEY_PASSWORD") ?: ""
+            storeFile file('my-upload-key.keystore')
+            storePassword project.findProperty("MYAPP_UPLOAD_STORE_PASSWORD") ?: ""
+            keyAlias "my-key-alias"
+            keyPassword project.findProperty("MYAPP_UPLOAD_KEY_PASSWORD") ?: ""
         }
     }
 

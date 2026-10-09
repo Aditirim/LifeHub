@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
 
 import { useTheme } from '../../context/ThemeContext';
 import { SPACING, RADIUS } from '../../constants/spacing';
@@ -26,7 +25,6 @@ const SETTINGS_KEY = '@lifehub_alarm_settings';
 
 export default function AlarmSettingsScreen() {
   const { colors } = useTheme();
-  const nav        = useNavigation();
   const [settings, setSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [hasExactPerm, setHasExactPerm] = useState<boolean | null>(null);
 
@@ -60,9 +58,9 @@ export default function AlarmSettingsScreen() {
       {hasExactPerm === false && (
         <TouchableOpacity
           onPress={() => openExactAlarmSettings()}
-          style={[styles.permBanner, { backgroundColor: '#F97316' + '22', borderColor: '#F97316' }]}>
-          <Icon name="alert-circle-outline" size={20} color="#F97316" />
-          <Text style={[styles.permText, { color: '#F97316' }]}>
+          style={[styles.permBanner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
+          <Icon name="alert-circle-outline" size={20} color={colors.warning} />
+          <Text style={[styles.permText, { color: colors.warning }]}>
             Exact alarm permission not granted. Tap to open Settings.
           </Text>
         </TouchableOpacity>
@@ -199,9 +197,9 @@ export default function AlarmSettingsScreen() {
       {hasExactPerm === false && (
         <TouchableOpacity
           onPress={() => openExactAlarmSettings()}
-          style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: '#F97316' }]}>
-          <Icon name="cog" size={18} color="#F97316" />
-          <Text style={[styles.actionText, { color: '#F97316' }]}>Grant exact alarm permission</Text>
+          style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.warning }]}>
+          <Icon name="cog" size={18} color={colors.warning} />
+          <Text style={[styles.actionText, { color: colors.warning }]}>Grant exact alarm permission</Text>
         </TouchableOpacity>
       )}
 

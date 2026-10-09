@@ -46,14 +46,6 @@ export function useAlarms() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [settings,    setSettings]    = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
 
-  // ── Load alarms + check permission ────────────────────────────────────────
-
-  useEffect(() => {
-    loadAll();
-    checkPermission();
-    loadSettings();
-  }, []);
-
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -80,7 +72,7 @@ export function useAlarms() {
           ],
         );
       }
-    } catch (e) {
+    } catch {
       setHasPermission(true); // Assume OK if check fails (API < 31)
     }
   }, []);
@@ -91,6 +83,14 @@ export function useAlarms() {
       if (raw) setSettings({ ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(raw) });
     } catch {}
   }, []);
+
+  // ── Load alarms + check permission ────────────────────────────────────────
+
+  useEffect(() => {
+    loadAll();
+    checkPermission();
+    loadSettings();
+  }, [checkPermission, loadAll, loadSettings]);
 
   const saveSettings = useCallback(async (updated: AlarmSettings) => {
     setSettings(updated);
