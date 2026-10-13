@@ -19,7 +19,13 @@ import { BUILTIN_RINGTONES } from '../../native/AlarmModule';
 import {
   AlarmSettings, DEFAULT_ALARM_SETTINGS,
 } from '../../hooks/useAlarms';
-import { rescheduleAllAlarms, openExactAlarmSettings, checkExactAlarmPermission } from '../../native/AlarmModule';
+import {
+  rescheduleAllAlarms,
+  openExactAlarmSettings,
+  checkExactAlarmPermission,
+  checkFullScreenIntentPermission,
+  openFullScreenIntentSettings,
+} from '../../native/AlarmModule';
 
 const SETTINGS_KEY = '@lifehub_alarm_settings';
 
@@ -27,6 +33,7 @@ export default function AlarmSettingsScreen() {
   const { colors } = useTheme();
   const [settings, setSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
   const [hasExactPerm, setHasExactPerm] = useState<boolean | null>(null);
+  const [hasFullScreenPerm, setHasFullScreenPerm] = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(SETTINGS_KEY).then(raw => {
@@ -34,6 +41,7 @@ export default function AlarmSettingsScreen() {
     }).catch(() => {});
 
     checkExactAlarmPermission().then(setHasExactPerm).catch(() => setHasExactPerm(true));
+    checkFullScreenIntentPermission().then(setHasFullScreenPerm).catch(() => setHasFullScreenPerm(true));
   }, []);
 
   async function update(patch: Partial<AlarmSettings>) {
@@ -62,6 +70,18 @@ export default function AlarmSettingsScreen() {
           <Icon name="alert-circle-outline" size={20} color={colors.warning} />
           <Text style={[styles.permText, { color: colors.warning }]}>
             Exact alarm permission not granted. Tap to open Settings.
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Full-screen intent permission banner (Android 14+) */}
+      {hasFullScreenPerm === false && (
+        <TouchableOpacity
+          onPress={() => openFullScreenIntentSettings()}
+          style={[styles.permBanner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
+          <Icon name="cellphone-sound" size={20} color={colors.warning} />
+          <Text style={[styles.permText, { color: colors.warning }]}>
+            Full-screen alarm access not granted. Tap to allow full-screen alarms over lock screen.
           </Text>
         </TouchableOpacity>
       )}

@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { scheduleTimer, cancelTimer } from '../native/AlarmModule';
+import { scheduleTimer, cancelTimer, stopTimer } from '../native/AlarmModule';
 
 const TIMER_KEY = '@lifehub_timer';
 
@@ -151,6 +151,7 @@ export function useTimer() {
     if (stateRef.current.nativeTimerId) {
       await cancelTimer(stateRef.current.nativeTimerId).catch(() => {});
     }
+    await stopTimer().catch(() => {});
     applyState(INITIAL);
   }, [applyState]);
 

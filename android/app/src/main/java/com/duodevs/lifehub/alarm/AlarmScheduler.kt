@@ -64,9 +64,19 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // setAlarmClock fires even in Doze and shows status-bar icon
-        val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, pending)
-        alarmManager.setAlarmClock(clockInfo, pending)
+        // setAlarmClock fires even in Doze and shows status-bar icon.
+        // If exact alarm permission is revoked, gracefully fall back to setAndAllowWhileIdle.
+        try {
+            val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, pending)
+            alarmManager.setAlarmClock(clockInfo, pending)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "setAlarmClock SecurityException, fallback to setAndAllowWhileIdle: ${e.message}")
+            try {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pending)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback setAndAllowWhileIdle also failed: ${e2.message}")
+            }
+        }
     }
 
     /**
@@ -116,10 +126,18 @@ object AlarmScheduler {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        // setAlarmClock fires reliably even in Doze mode (Android's Doze whitelist)
-        val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, pending)
-        alarmManager.setAlarmClock(clockInfo, pending)
-        Log.d(TAG, "Timer $timerId '$label' scheduled for $triggerMs")
+        try {
+            val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, pending)
+            alarmManager.setAlarmClock(clockInfo, pending)
+            Log.d(TAG, "Timer $timerId '$label' scheduled for $triggerMs")
+        } catch (e: SecurityException) {
+            Log.w(TAG, "setAlarmClock SecurityException for timer, fallback to setAndAllowWhileIdle: ${e.message}")
+            try {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pending)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback setAndAllowWhileIdle also failed: ${e2.message}")
+            }
+        }
     }
 
     fun cancelTimer(context: Context, timerId: String) {

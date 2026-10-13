@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -36,7 +37,7 @@ import com.duodevs.lifehub.R
  *  3. Plays the selected ringtone in a loop
  *  4. Optionally ramps volume gradually
  *  5. Optionally vibrates
- *  6. Stopped when the user Dismisses or Snoozes from AlarmActivity
+ *  6. Stopped when the user Dismisses or Snoozes from AlarmActivity or notification
  *
  * Audio handling:
  *  - Uses AudioManager.STREAM_ALARM for proper alarm audio routing
@@ -52,11 +53,12 @@ class AlarmService : Service() {
     companion object {
         private const val TAG = "AlarmService"
 
-        private const val CHANNEL_ID = "lifehub_alarm_service"
+        const val CHANNEL_ID = "lifehub_alarm_v2"
 
-        /** Intent action sent to this service to stop it */
-        const val ACTION_STOP_ALARM  = "com.duodevs.lifehub.STOP_ALARM"
-        const val ACTION_SNOOZE_ALARM = "com.duodevs.lifehub.SNOOZE_ALARM"
+        /** Intent action sent to this service to stop or snooze it */
+        const val ACTION_STOP_ALARM      = "com.duodevs.lifehub.STOP_ALARM"
+        const val ACTION_SNOOZE_ALARM    = "com.duodevs.lifehub.SNOOZE_ALARM"
+        const val ACTION_ALARM_DISMISSED = "com.duodevs.lifehub.ALARM_DISMISSED"
 
         /** Auto-dismiss after this duration if user doesn't interact */
         private const val MAX_ALARM_DURATION_MS = 5 * 60 * 1000L // 5 minutes
@@ -66,11 +68,7 @@ class AlarmService : Service() {
 
         /**
          * Derive a unique-per-alarm notification ID from the alarm's string ID.
-         * Using a fixed ID (e.g. 8888) caused the Android OS to treat Alarm #2's
-         * full-screen notification as an *update* to Alarm #1's already-consumed
-         * notification, suppressing the full-screen intent on repeated alarms.
-         * We keep the ID in the range [10000, 10000+0x7FFFF] to avoid collisions
-         * with other notification IDs used elsewhere in the app.
+         * Kept in the range [10000, 10000+0x7FFFF].
          */
         fun notifIdForAlarm(alarmId: String): Int = 10_000 + (alarmId.hashCode() and 0x7FFFF)
     }
@@ -98,8 +96,6 @@ class AlarmService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // Acquire WakeLock immediately so the CPU stays awake long enough
-        // to start the foreground service and audio before Android can suspend us.
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -111,7 +107,28 @@ class AlarmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP_ALARM, ACTION_SNOOZE_ALARM -> {
+            ACTION_STOP_ALARM -> {
+                stopAlarm()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_SNOOZE_ALARM -> {
+                val id = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID) ?: currentAlarmId
+                if (id != null) {
+                    val alarm = AlarmStorage.getById(this, id)
+                    if (alarm != null) {
+                        val snoozeMs = alarm.snoozeMinutes * 60 * 1000L
+                        val snoozeData = alarm.copy(
+                            id         = "${alarm.id}_snooze_${System.currentTimeMillis()}",
+                            enabled    = true,
+                            repeatDays = emptyList(),
+                            updatedAt  = System.currentTimeMillis(),
+                        )
+                        AlarmStorage.save(this, snoozeData)
+                        AlarmScheduler.schedule(this, snoozeData, System.currentTimeMillis() + snoozeMs)
+                        Log.d(TAG, "Snoozed alarm ${alarm.id} for ${alarm.snoozeMinutes} min")
+                    }
+                }
                 stopAlarm()
                 stopSelf()
                 return START_NOT_STICKY
@@ -133,12 +150,13 @@ class AlarmService : Service() {
             return START_NOT_STICKY
         }
 
-        // Show foreground notification immediately to satisfy Android's requirement.
-        // Must be called within 5 seconds of startForegroundService().
-        // We use a unique notification ID per alarm (currentNotifId) so Android treats
-        // each alarm as a fresh notification and re-triggers the full-screen intent.
         createServiceChannel()
-        startForeground(currentNotifId, buildForegroundNotification(alarm))
+        val notification = buildForegroundNotification(alarm)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(currentNotifId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(currentNotifId, notification)
+        }
 
         // Request audio focus so audio plays correctly on STREAM_ALARM
         requestAlarmAudioFocus()
@@ -148,9 +166,10 @@ class AlarmService : Service() {
         if (alarm.vibrationEnabled) startVibration()
 
         // Auto-dismiss safety net
+        handler.removeCallbacks(autoDismissRunnable)
         handler.postDelayed(autoDismissRunnable, MAX_ALARM_DURATION_MS)
 
-        return START_NOT_STICKY // Don't restart if killed — alarm has fired
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -371,6 +390,24 @@ class AlarmService : Service() {
         handler.removeCallbacks(autoDismissRunnable)
         currentAlarmId = null
 
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping foreground: ${e.message}")
+        }
+
+        try {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(currentNotifId)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling notification: ${e.message}")
+        }
+
         // Release any player still in prepareAsync() phase
         try {
             preparingPlayer?.release()
@@ -395,6 +432,13 @@ class AlarmService : Service() {
         }
 
         abandonAudioFocus()
+
+        // Notify AlarmActivity to finish if running
+        try {
+            sendBroadcast(Intent(ACTION_ALARM_DISMISSED).setPackage(packageName))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error broadcasting dismiss: ${e.message}")
+        }
     }
 
     private fun releaseWakeLock() {
@@ -411,35 +455,38 @@ class AlarmService : Service() {
     // ── Notification ──────────────────────────────────────────────────────────
 
     private fun buildForegroundNotification(alarm: AlarmData): Notification {
-        // Use alarm.id hashCode as the base request code so PendingIntents are
-        // unique per alarm. Using fixed codes (0,1,2,3) caused the system to
-        // return stale PendingIntents from Alarm #1 for Alarm #2.
-        val baseCode = alarm.id.hashCode() and 0x7FFF  // keep in safe range
+        val baseCode = alarm.id.hashCode() and 0x7FFF
 
-        // Dismiss action
-        val dismissIntent = Intent(this, AlarmService::class.java).apply {
+        // Stop action (broadcast to AlarmReceiver)
+        val dismissIntent = Intent(this, AlarmReceiver::class.java).apply {
             action = ACTION_STOP_ALARM
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
+            `package` = packageName
         }
-        val dismissPending = PendingIntent.getService(
+        val dismissPending = PendingIntent.getBroadcast(
             this, baseCode, dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // Snooze action
-        val snoozeIntent = Intent(this, AlarmService::class.java).apply {
+        // Snooze action (broadcast to AlarmReceiver)
+        val snoozeIntent = Intent(this, AlarmReceiver::class.java).apply {
             action = ACTION_SNOOZE_ALARM
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
+            `package` = packageName
         }
-        val snoozePending = PendingIntent.getService(
+        val snoozePending = PendingIntent.getBroadcast(
             this, baseCode + 1, snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         // Tap → open AlarmActivity
         val tapIntent = Intent(this, AlarmActivity::class.java).apply {
+            action = "com.duodevs.lifehub.ALARM_TAP_${alarm.id}"
+            data = Uri.parse("lifehub://alarm/${alarm.id}")
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val tapPending = PendingIntent.getActivity(
             this, baseCode + 2, tapIntent,
@@ -447,14 +494,17 @@ class AlarmService : Service() {
         )
 
         // Full-screen intent — shows AlarmActivity over the lock screen.
-        // CRITICAL: Use FLAG_CANCEL_CURRENT (not FLAG_UPDATE_CURRENT) so Android always
-        // creates a *new* PendingIntent for the full-screen intent on each alarm.
-        // With FLAG_UPDATE_CURRENT, the second alarm reused the first alarm's
-        // PendingIntent from the OS cache, which had already been consumed/delivered,
-        // causing the full-screen intent to be silently skipped for Alarm #2+.
+        val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
+            action = "com.duodevs.lifehub.ALARM_FULL_SCREEN_${alarm.id}"
+            data = Uri.parse("lifehub://alarm/${alarm.id}")
+            putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
         val fullScreenPending = PendingIntent.getActivity(
-            this, baseCode + 3, tapIntent,
-            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            this, baseCode + 3, fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val timeStr = String.format("%02d:%02d", alarm.hour, alarm.minute)
@@ -471,7 +521,7 @@ class AlarmService : Service() {
             .setContentIntent(tapPending)
             .setFullScreenIntent(fullScreenPending, true)
             .addAction(0, "Snooze", snoozePending)
-            .addAction(0, "Dismiss", dismissPending)
+            .addAction(0, "Stop", dismissPending)
             .build()
     }
 
@@ -481,14 +531,15 @@ class AlarmService : Service() {
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Alarm Playing",
+            "Alarms",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "Active alarm service"
+            description = "Active alarm ringing notifications"
             setBypassDnd(true)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setSound(null, null) // sound is handled by MediaPlayer, not the notification
-            enableVibration(false) // vibration is handled by startVibration() directly
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 500)
+            setSound(null, null) // Sound is looped by MediaPlayer via STREAM_ALARM
         }
         nm.createNotificationChannel(channel)
     }

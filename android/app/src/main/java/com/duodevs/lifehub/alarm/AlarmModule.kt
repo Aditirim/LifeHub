@@ -1,6 +1,8 @@
 package com.duodevs.lifehub.alarm
 
 import android.app.AlarmManager
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -250,15 +252,29 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
     }
 
     /**
-     * Cancel a pending timer by ID.
+     * Cancel a pending timer by ID and stop any active timer notification/audio.
      */
     @ReactMethod
     fun cancelTimer(timerId: String, promise: Promise) {
         try {
             AlarmScheduler.cancelTimer(reactContext, timerId)
+            TimerReceiver.stopTimer(reactContext)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("TIMER_CANCEL_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Stop currently ringing timer notification, audio, and vibration.
+     */
+    @ReactMethod
+    fun stopTimer(promise: Promise) {
+        try {
+            TimerReceiver.stopTimer(reactContext)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("TIMER_STOP_ERROR", e.message, e)
         }
     }
 
@@ -284,6 +300,43 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:${reactContext.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SETTINGS_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Check if the app has USE_FULL_SCREEN_INTENT permission (Android 14+).
+     * Below Android 14, full screen intents are permitted by default.
+     */
+    @ReactMethod
+    fun checkFullScreenIntentPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val nm = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                promise.resolve(nm.canUseFullScreenIntent())
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            promise.resolve(true)
+        }
+    }
+
+    /**
+     * Open system settings for full-screen intent special app access (Android 14+).
+     */
+    @ReactMethod
+    fun openFullScreenIntentSettings(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }

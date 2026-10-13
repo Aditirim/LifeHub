@@ -1,13 +1,18 @@
 package com.duodevs.lifehub.alarm
 
 import android.app.Activity
-import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -18,24 +23,18 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * AlarmActivity — full-screen native Android alarm UI.
+ * AlarmActivity — full-screen native Android alarm and timer completion UI.
  *
- * Shown over the lock screen when an alarm fires, even when the app is closed.
+ * Shown over the lock screen when an alarm or timer completes, even when
+ * LifeHub is closed, backgrounded, or swiped away from Recents.
  *
  * Key behaviors:
- *  - Appears over the lock screen (FLAG_SHOW_WHEN_LOCKED + setShowWhenLocked)
- *  - Wakes the screen (FLAG_TURN_SCREEN_ON + setTurnScreenOn)
- *  - Keeps screen on while alarm is ringing (FLAG_KEEP_SCREEN_ON)
- *  - Live clock display updated every second
- *  - Snooze button: stops audio + schedules snooze alarm → finishes activity
- *  - Dismiss button: stops audio → finishes activity
- *
- * Communication with AlarmService:
- *  - We send explicit Intents to AlarmService to stop/snooze
- *  - AlarmService.currentAlarmId allows us to verify the right alarm is playing
- *
- * Layout is built programmatically (no XML layout file needed — simpler and
- * avoids resource conflicts with the main RN app layout).
+ *  - Appears over the lock screen (showWhenLocked + FLAG_SHOW_WHEN_LOCKED)
+ *  - Wakes the screen (turnScreenOn + FLAG_TURN_SCREEN_ON)
+ *  - Keeps screen awake while ringing (FLAG_KEEP_SCREEN_ON)
+ *  - Displays live time for alarms, or "00:00" for timers
+ *  - Stop / Snooze controls are prominent, high-contrast and immediately functional
+ *  - Automatically finishes if dismissed via notification action
  */
 class AlarmActivity : Activity() {
 
@@ -43,8 +42,13 @@ class AlarmActivity : Activity() {
         private const val TAG = "AlarmActivity"
     }
 
+    private var isTimer: Boolean = false
+    private var timerId: String? = null
+    private var timerLabel: String? = null
+
     private var alarmId: String? = null
     private var alarm: AlarmData? = null
+
     private val handler = Handler(Looper.getMainLooper())
     private val clockRunnable = object : Runnable {
         override fun run() {
@@ -53,13 +57,24 @@ class AlarmActivity : Activity() {
         }
     }
 
+    private var isReceiverRegistered = false
+    private val dismissReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Log.d(TAG, "Dismiss broadcast received (${intent.action}) — finishing AlarmActivity")
+            finish()
+        }
+    }
+
+    private lateinit var clockText: TextView
+    private lateinit var dateText: TextView
+    private lateinit var labelText: TextView
+    private lateinit var ringtoneText: TextView
+
     // ── Activity lifecycle ─────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        alarmId = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID)
-        alarm   = alarmId?.let { AlarmStorage.getById(this, it) }
+        extractIntentData(intent)
 
         // Configure window to show over lock screen and wake the device
         setupWindowFlags()
@@ -67,28 +82,34 @@ class AlarmActivity : Activity() {
         // Build and show the UI
         setContentView(buildLayout())
 
-        // Start the live clock
+        // Start clock ticker
         handler.post(clockRunnable)
+
+        // Listen for dismissal broadcasts from AlarmService or TimerReceiver
+        registerDismissReceiver()
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(clockRunnable)
+        unregisterDismissReceiver()
         super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)  // update getIntent() so subsequent reads are correct
-        // If a new alarm fires while this activity is on screen (singleTask delivery),
-        // update to show the new alarm's info and refresh the UI labels.
-        val newId = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID)
-        if (newId != null && newId != alarmId) {
-            alarmId = newId
-            alarm   = AlarmStorage.getById(this, newId)
-            // Refresh the label and ringtone text in the existing layout
-            if (::labelText.isInitialized)    labelText.text    = alarm?.label ?: "Alarm"
-            if (::ringtoneText.isInitialized) ringtoneText.text = "🔔 ${resolveRingtoneName()}"
-        }
+        setIntent(intent)
+        extractIntentData(intent)
+        setContentView(buildLayout())
+    }
+
+    private fun extractIntentData(intent: Intent?) {
+        if (intent == null) return
+        isTimer    = intent.getBooleanExtra(TimerReceiver.EXTRA_IS_TIMER, false)
+        timerId    = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_ID)
+        timerLabel = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_LABEL) ?: "Timer"
+
+        alarmId    = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID)
+        alarm      = alarmId?.let { AlarmStorage.getById(this, it) }
     }
 
     // ── Window flags ──────────────────────────────────────────────────────────
@@ -97,114 +118,153 @@ class AlarmActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val km = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-            km.requestDismissKeyguard(this, null)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
-            )
         }
+        @Suppress("DEPRECATION")
         window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON,
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
+    }
+
+    private fun registerDismissReceiver() {
+        if (isReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(AlarmService.ACTION_ALARM_DISMISSED)
+            addAction(TimerReceiver.ACTION_TIMER_DISMISSED)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(dismissReceiver, filter, RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(dismissReceiver, filter)
+            }
+            isReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering dismissReceiver: ${e.message}")
+        }
+    }
+
+    private fun unregisterDismissReceiver() {
+        if (!isReceiverRegistered) return
+        try {
+            unregisterReceiver(dismissReceiver)
+            isReceiverRegistered = false
+        } catch (_: Exception) {}
     }
 
     // ── UI (programmatic layout) ──────────────────────────────────────────────
 
-    private lateinit var clockText:  TextView
-    private lateinit var dateText:   TextView
-    private lateinit var labelText:  TextView
-    private lateinit var ringtoneText: TextView
-
     private fun buildLayout(): View {
         val root = LinearLayout(this).apply {
-            orientation  = LinearLayout.VERTICAL
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#0D0D1A"))
-            gravity      = android.view.Gravity.CENTER
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(24), dpToPx(48), dpToPx(24), dpToPx(48))
         }
 
-        // Clock
+        // Clock display
         clockText = TextView(this).apply {
-            textSize  = 72f
+            textSize = 72f
             setTextColor(Color.WHITE)
-            gravity   = android.view.Gravity.CENTER
-            typeface  = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             includeFontPadding = false
         }
         root.addView(clockText, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { bottomMargin = dpToPx(8) })
 
-        // Date
+        // Date / status line
         dateText = TextView(this).apply {
-            textSize  = 18f
+            textSize = 18f
             setTextColor(Color.parseColor("#9CA3AF"))
-            gravity   = android.view.Gravity.CENTER
+            gravity = Gravity.CENTER
         }
         root.addView(dateText, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { bottomMargin = dpToPx(40) })
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dpToPx(36) })
 
         // Label
         labelText = TextView(this).apply {
-            text      = alarm?.label ?: "Alarm"
-            textSize  = 28f
+            text = if (isTimer) (timerLabel ?: "Timer") else (alarm?.label ?: "Alarm")
+            textSize = 28f
             setTextColor(Color.WHITE)
-            gravity   = android.view.Gravity.CENTER
-            typeface  = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
         root.addView(labelText, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { bottomMargin = dpToPx(12) })
 
-        // Ringtone name
+        // Ringtone / Subtitle
         ringtoneText = TextView(this).apply {
-            text      = "🔔 ${resolveRingtoneName()}"
-            textSize  = 14f
+            text = if (isTimer) "⏱️ Time's up!" else "🔔 ${resolveRingtoneName()}"
+            textSize = 15f
             setTextColor(Color.parseColor("#A78BFA"))
-            gravity   = android.view.Gravity.CENTER
+            gravity = Gravity.CENTER
         }
         root.addView(ringtoneText, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { bottomMargin = dpToPx(64) })
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dpToPx(56) })
 
-        // Button row
-        val btnRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity     = android.view.Gravity.CENTER
+        // Control buttons
+        if (isTimer) {
+            // Single prominent Stop button for timer
+            val stopBtn = Button(this).apply {
+                text = "Stop Timer"
+                textSize = 18f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#7C3AED"))
+                setPadding(dpToPx(40), dpToPx(18), dpToPx(40), dpToPx(18))
+                setOnClickListener { onTimerStop() }
+            }
+            root.addView(stopBtn, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+        } else {
+            // Snooze & Stop buttons for alarm
+            val btnRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+
+            val snoozeBtn = Button(this).apply {
+                text = "Snooze"
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#374151"))
+                setPadding(dpToPx(32), dpToPx(16), dpToPx(32), dpToPx(16))
+                setOnClickListener { onSnooze() }
+            }
+            btnRow.addView(snoozeBtn, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = dpToPx(24) })
+
+            val stopBtn = Button(this).apply {
+                text = "Stop"
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#7C3AED"))
+                setPadding(dpToPx(36), dpToPx(16), dpToPx(36), dpToPx(16))
+                setOnClickListener { onDismiss() }
+            }
+            btnRow.addView(stopBtn, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+
+            root.addView(btnRow)
         }
 
-        // Snooze button
-        val snoozeBtn = Button(this).apply {
-            text            = "Snooze"
-            textSize        = 16f
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#374151"))
-            setPadding(dpToPx(32), dpToPx(16), dpToPx(32), dpToPx(16))
-            setOnClickListener { onSnooze() }
-        }
-        btnRow.addView(snoozeBtn, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { marginEnd = dpToPx(24) })
-
-        // Dismiss button
-        val dismissBtn = Button(this).apply {
-            text            = "Dismiss"
-            textSize        = 16f
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#7C3AED"))
-            setPadding(dpToPx(32), dpToPx(16), dpToPx(32), dpToPx(16))
-            setOnClickListener { onDismiss() }
-        }
-        btnRow.addView(dismissBtn, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ))
-
-        root.addView(btnRow)
+        updateClock()
         return root
     }
 
@@ -212,41 +272,47 @@ class AlarmActivity : Activity() {
 
     private fun updateClock() {
         val now = Date()
-        clockText.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
-        dateText.text  = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now)
+        if (isTimer) {
+            clockText.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
+            dateText.text  = "Timer Finished"
+        } else {
+            clockText.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
+            dateText.text  = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now)
+        }
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
 
+    private fun onTimerStop() {
+        TimerReceiver.stopTimer(this)
+        finish()
+    }
+
     private fun onSnooze() {
-        val id = alarmId ?: return
-        val a  = alarm    ?: return
+        val id = alarmId
+        val a  = alarm
 
-        // Schedule the snooze alarm (native, so it works with app closed).
-        // Use a timestamp-suffix so multiple snoozes of the same alarm don't
-        // collide in storage or PendingIntent request codes.
-        val snoozeMs = a.snoozeMinutes * 60 * 1000L
-        val snoozeData = a.copy(
-            id         = "${id}_snooze_${System.currentTimeMillis()}",
-            enabled    = true,
-            repeatDays = emptyList(), // one-time snooze
-            updatedAt  = System.currentTimeMillis(),
-        )
-        AlarmStorage.save(this, snoozeData)
-        AlarmScheduler.schedule(this, snoozeData, System.currentTimeMillis() + snoozeMs)
+        if (id != null && a != null) {
+            val snoozeMs = a.snoozeMinutes * 60 * 1000L
+            val snoozeData = a.copy(
+                id         = "${id}_snooze_${System.currentTimeMillis()}",
+                enabled    = true,
+                repeatDays = emptyList(), // one-time snooze
+                updatedAt  = System.currentTimeMillis(),
+            )
+            AlarmStorage.save(this, snoozeData)
+            AlarmScheduler.schedule(this, snoozeData, System.currentTimeMillis() + snoozeMs)
+        }
 
-        // Use explicit ACTION_SNOOZE_ALARM so AlarmService runs its proper cleanup
-        // (stopAlarm() → release MediaPlayer, abandon audio focus, cancel vibration)
         startService(Intent(this, AlarmService::class.java).apply {
-            action = AlarmService.ACTION_SNOOZE_ALARM
-            putExtra(AlarmScheduler.EXTRA_ALARM_ID, id)
+            action = AlarmService.ACTION_STOP_ALARM
+            putExtra(AlarmScheduler.EXTRA_ALARM_ID, id ?: "")
         })
 
         finish()
     }
 
     private fun onDismiss() {
-        // Use explicit ACTION_STOP_ALARM so AlarmService runs stopAlarm() cleanup path
         startService(Intent(this, AlarmService::class.java).apply {
             action = AlarmService.ACTION_STOP_ALARM
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId ?: "")

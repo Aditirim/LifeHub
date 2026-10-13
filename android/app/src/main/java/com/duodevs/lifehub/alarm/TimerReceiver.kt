@@ -1,5 +1,6 @@
 package com.duodevs.lifehub.alarm
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,94 +9,190 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.duodevs.lifehub.MainActivity
 import com.duodevs.lifehub.R
 
 /**
- * TimerReceiver — fires when a countdown timer expires.
+ * TimerReceiver — fires when a countdown timer expires, and handles timer stop actions.
  *
- * Shows a high-priority notification with sound.
- * Does NOT start a foreground service or full-screen activity
- * (timers are less intrusive than alarms by design).
+ * Capabilities:
+ *  1. Shows a high-importance, ongoing notification with an immediate "Stop" action button.
+ *  2. Attaches a full-screen intent so that over the lock screen (or as a heads-up banner),
+ *     AlarmActivity presents the full-screen Timer Done UI with a visible Stop control.
+ *  3. Vibrates and triggers alarm audio via the dedicated high-importance notification channel.
+ *  4. Stops audio, vibration, and dismisses UI immediately when "Stop" is pressed.
+ *  5. Includes a 5-minute safety timeout to prevent indefinite ringing if left unattended.
  */
 class TimerReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val TAG        = "TimerReceiver"
-        private const val CHANNEL_ID = "lifehub_timer"
-        private const val NOTIF_ID   = 9001
+        private const val TAG = "TimerReceiver"
+
+        const val CHANNEL_ID             = "lifehub_timer_v2"
+        const val NOTIF_ID               = 9001
+        const val ACTION_STOP_TIMER      = "com.duodevs.lifehub.STOP_TIMER"
+        const val ACTION_TIMER_DISMISSED = "com.duodevs.lifehub.TIMER_DISMISSED"
+        const val EXTRA_IS_TIMER         = "is_timer"
+
+        private val handler = Handler(Looper.getMainLooper())
+        private var autoDismissRunnable: Runnable? = null
+        private var activeVibrator: Vibrator? = null
+
+        /**
+         * Stop the timer alert: dismiss notification, stop vibration, and notify UI.
+         */
+        @Synchronized
+        fun stopTimer(context: Context) {
+            Log.d(TAG, "Stopping timer alert")
+            autoDismissRunnable?.let { handler.removeCallbacks(it) }
+            autoDismissRunnable = null
+
+            // Cancel notification (stops channel alarm sound immediately)
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.cancel(NOTIF_ID)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cancelling timer notification: ${e.message}")
+            }
+
+            // Cancel vibration
+            try {
+                activeVibrator?.cancel()
+                activeVibrator = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error cancelling timer vibrator: ${e.message}")
+            }
+
+            // Dismiss any open AlarmActivity showing this timer
+            try {
+                context.sendBroadcast(Intent(ACTION_TIMER_DISMISSED).setPackage(context.packageName))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending timer dismissed broadcast: ${e.message}")
+            }
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != AlarmScheduler.ACTION_TIMER_FIRE) return
+        when (intent.action) {
+            ACTION_STOP_TIMER -> {
+                Log.d(TAG, "Received ACTION_STOP_TIMER")
+                stopTimer(context)
+            }
+            AlarmScheduler.ACTION_TIMER_FIRE -> {
+                val timerId = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_ID) ?: "timer"
+                val label   = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_LABEL) ?: "Timer"
+                Log.d(TAG, "Timer fired: $timerId '$label'")
 
-        val timerId = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_ID) ?: return
-        val label   = intent.getStringExtra(AlarmScheduler.EXTRA_TIMER_LABEL) ?: "Timer"
-        Log.d(TAG, "Timer fired: $timerId '$label'")
+                createTimerChannel(context)
+                showTimerNotification(context, timerId, label)
+                startVibration(context)
 
-        createTimerChannel(context)
-        showTimerNotification(context, label)
-        vibrate(context)
+                // Safety timeout: auto-stop after 5 minutes so it never rings forever
+                autoDismissRunnable?.let { handler.removeCallbacks(it) }
+                val runnable = Runnable { stopTimer(context.applicationContext) }
+                autoDismissRunnable = runnable
+                handler.postDelayed(runnable, 5 * 60 * 1000L)
+            }
+        }
     }
 
-    private fun showTimerNotification(context: Context, label: String) {
+    private fun showTimerNotification(context: Context, timerId: String, label: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Tap notification → open LifeHub
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        // Stop Action Intent (broadcast to TimerReceiver)
+        val stopIntent = Intent(context, TimerReceiver::class.java).apply {
+            action = ACTION_STOP_TIMER
+            putExtra(AlarmScheduler.EXTRA_TIMER_ID, timerId)
+            `package` = context.packageName
         }
-        val tapPending = PendingIntent.getActivity(
-            context, 0, tapIntent,
+        val stopPending = PendingIntent.getBroadcast(
+            context,
+            NOTIF_ID + 1,
+            stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // On Android 8+ (API 26+), sound is controlled by the CHANNEL, not by
-        // NotificationCompat.Builder.setSound() / setDefaults(). Setting both
-        // causes conflicts and the sound may not play.
-        // We configure the channel with the alarm URI in createTimerChannel().
+        // Full-screen Activity Intent (opens AlarmActivity in Timer mode)
+        val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
+            action = "com.duodevs.lifehub.TIMER_FULL_SCREEN_${timerId}"
+            data = Uri.parse("lifehub://timer/${timerId}")
+            putExtra(EXTRA_IS_TIMER, true)
+            putExtra(AlarmScheduler.EXTRA_TIMER_ID, timerId)
+            putExtra(AlarmScheduler.EXTRA_TIMER_LABEL, label)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val fullScreenPending = PendingIntent.getActivity(
+            context,
+            NOTIF_ID + 2,
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // Notification tap intent
+        val tapIntent = Intent(context, AlarmActivity::class.java).apply {
+            action = "com.duodevs.lifehub.TIMER_TAP_${timerId}"
+            data = Uri.parse("lifehub://timer/${timerId}")
+            putExtra(EXTRA_IS_TIMER, true)
+            putExtra(AlarmScheduler.EXTRA_TIMER_ID, timerId)
+            putExtra(AlarmScheduler.EXTRA_TIMER_LABEL, label)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val tapPending = PendingIntent.getActivity(
+            context,
+            NOTIF_ID + 3,
+            tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("\u23f1\ufe0f Timer Done!")
+            .setContentTitle("⏱️ Timer Done!")
             .setContentText(label)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // Do NOT call setDefaults(DEFAULT_SOUND) or setSound() here — on Android 8+
-            // the CHANNEL controls the sound; setting it on the builder overrides and
-            // conflicts, often resulting in silence.
-            .setContentIntent(tapPending)
+            .setOngoing(false)
             .setAutoCancel(true)
+            .setContentIntent(tapPending)
+            .setFullScreenIntent(fullScreenPending, true)
+            .addAction(0, "Stop", stopPending)
             .build()
 
         nm.notify(NOTIF_ID, notification)
     }
 
-    private fun vibrate(context: Context) {
+    private fun startVibration(context: Context) {
         try {
-            // Pattern: immediate 400ms vibrate, 200ms pause, 400ms vibrate — no repeat
-            val pattern = longArrayOf(0, 400, 200, 400)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val pattern = longArrayOf(0, 500, 250, 500)
+            val v: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                val v  = vm.defaultVibrator
-                v.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                vm.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                val v = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    v.vibrate(VibrationEffect.createWaveform(pattern, -1))
-                } else {
-                    @Suppress("DEPRECATION")
-                    v.vibrate(pattern, -1)
-                }
+                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-        } catch (_: Exception) {}
+            activeVibrator = v
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createWaveform(pattern, 0)) // loop until stopped
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Vibration error: ${e.message}")
+        }
     }
 
     private fun createTimerChannel(context: Context) {
@@ -103,11 +200,11 @@ class TimerReceiver : BroadcastReceiver() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
 
-        // Configure the channel with an alarm-type sound so the timer chime is audible.
         val alarmSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        val audioAttrs = android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val audioAttrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
         val channel = NotificationChannel(
@@ -117,8 +214,10 @@ class TimerReceiver : BroadcastReceiver() {
         ).apply {
             description = "Timer completion notifications"
             enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 250, 500)
             setSound(alarmSoundUri, audioAttrs)
             setBypassDnd(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(channel)
     }

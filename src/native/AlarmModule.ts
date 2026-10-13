@@ -188,6 +188,14 @@ export async function cancelTimer(timerId: string): Promise<void> {
   await NativeAlarmModule.cancelTimer(timerId);
 }
 
+/**
+ * Stop currently ringing timer notification, sound, and vibration.
+ */
+export async function stopTimer(): Promise<void> {
+  if (!isAvailable()) return;
+  await NativeAlarmModule.stopTimer();
+}
+
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 /**
@@ -205,6 +213,23 @@ export async function checkExactAlarmPermission(): Promise<boolean> {
 export async function openExactAlarmSettings(): Promise<void> {
   if (!isAvailable()) return;
   await NativeAlarmModule.openExactAlarmSettings();
+}
+
+/**
+ * Check if full-screen intent permission is granted (Android 14+).
+ * Returns true on API < 34, or if granted on API 34+.
+ */
+export async function checkFullScreenIntentPermission(): Promise<boolean> {
+  if (!isAvailable()) return true;
+  return NativeAlarmModule.checkFullScreenIntentPermission();
+}
+
+/**
+ * Open the system settings page for full-screen intent permission (Android 14+).
+ */
+export async function openFullScreenIntentSettings(): Promise<void> {
+  if (!isAvailable()) return;
+  await NativeAlarmModule.openFullScreenIntentSettings();
 }
 
 // ── Ringtone preview ──────────────────────────────────────────────────────────
