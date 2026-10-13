@@ -99,6 +99,7 @@ class AlarmActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         extractIntentData(intent)
+        setupWindowFlags()
         setContentView(buildLayout())
     }
 

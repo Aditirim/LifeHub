@@ -71,6 +71,29 @@ class AlarmService : Service() {
          * Kept in the range [10000, 10000+0x7FFFF].
          */
         fun notifIdForAlarm(alarmId: String): Int = 10_000 + (alarmId.hashCode() and 0x7FFFF)
+
+        /**
+         * Ensure the notification channel exists with IMPORTANCE_HIGH.
+         * Required for full-screen intents and heads-up notifications.
+         */
+        fun createChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Alarms",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Active alarm ringing notifications"
+                setBypassDnd(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 500)
+                setSound(null, null) // Sound is looped by MediaPlayer via STREAM_ALARM
+            }
+            nm.createNotificationChannel(channel)
+        }
     }
 
     /** Per-instance notification ID, set when the service starts. */
@@ -526,21 +549,6 @@ class AlarmService : Service() {
     }
 
     private fun createServiceChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Alarms",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "Active alarm ringing notifications"
-            setBypassDnd(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 500, 500)
-            setSound(null, null) // Sound is looped by MediaPlayer via STREAM_ALARM
-        }
-        nm.createNotificationChannel(channel)
+        createChannel(this)
     }
 }

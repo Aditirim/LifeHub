@@ -1,7 +1,5 @@
 package com.duodevs.lifehub.alarm
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -86,22 +84,7 @@ class AlarmReceiver : BroadcastReceiver() {
             showFallbackAlarmNotification(context, alarm)
         }
 
-        // 2. Launch the full-screen alarm activity (succeeds if app has visible window;
-        // if backgrounded, AlarmService or fallback notification's fullScreenIntent displays it)
-        val activityIntent = Intent(context, AlarmActivity::class.java).apply {
-            action = "com.duodevs.lifehub.ALARM_FIRE_${alarmId}"
-            putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        try {
-            context.startActivity(activityIntent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Direct startActivity skipped by background restrictions: ${e.message}")
-        }
-
-        // 3. Handle repeating vs one-time
+        // 2. Handle repeating vs one-time
         if (alarm.repeatDays.isNotEmpty()) {
             val nextFire = alarm.nextFireTimestamp(System.currentTimeMillis() + 60_000L)
             AlarmScheduler.schedule(context, alarm, nextFire)
@@ -186,8 +169,8 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun showFallbackAlarmNotification(context: Context, alarm: AlarmData) {
+        AlarmService.createChannel(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        createAlarmChannel(nm)
 
         val notifId = AlarmService.notifIdForAlarm(alarm.id)
         val baseCode = alarm.id.hashCode() and 0x7FFF
@@ -260,23 +243,5 @@ class AlarmReceiver : BroadcastReceiver() {
             .build()
 
         nm.notify(notifId, notification)
-    }
-
-    private fun createAlarmChannel(nm: NotificationManager) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (nm.getNotificationChannel(AlarmService.CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            AlarmService.CHANNEL_ID,
-            "Alarms",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "Active alarm ringing notifications"
-            setBypassDnd(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 500, 500)
-            setSound(null, null)
-        }
-        nm.createNotificationChannel(channel)
     }
 }
