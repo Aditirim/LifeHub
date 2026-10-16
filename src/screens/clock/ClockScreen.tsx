@@ -27,7 +27,12 @@ import { MainStackParamList } from '../../navigation/types';
 import { useAlarms } from '../../hooks/useAlarms';
 import { useStopwatch } from '../../hooks/useStopwatch';
 import { useTimer } from '../../hooks/useTimer';
-import { Alarm, repeatDaysLabel, getRingtoneLabel } from '../../native/AlarmModule';
+import {
+  Alarm, repeatDaysLabel, getRingtoneLabel,
+  checkAllPermissions, requestNotificationPermission,
+  openNotificationSettings, openExactAlarmSettings,
+  openFullScreenIntentSettings, PermissionsStatus,
+} from '../../native/AlarmModule';
 import { formatStopwatch, formatCountdown } from '../../utils/formatters';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -49,6 +54,15 @@ export default function ClockScreen() {
   const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<ClockTab>('clock');
   const [use24Hour, setUse24Hour] = useState(false);
+  const [permStatus, setPermStatus] = useState<PermissionsStatus | null>(null);
+
+  const refreshPermissions = React.useCallback(() => {
+    checkAllPermissions().then(setPermStatus).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPermissions();
+  }, [refreshPermissions, activeTab]);
 
   useEffect(() => {
     AsyncStorage.getItem(SETTINGS_KEY).then(raw => {
@@ -80,10 +94,90 @@ export default function ClockScreen() {
         ))}
       </View>
 
+      {/* Permission alert banners for alarms and timers */}
+      {(activeTab === 'timer' || activeTab === 'alarms') && permStatus && (
+        <>
+          {!permStatus.notifications && (
+            <View style={[styles.globalPermBanner, { backgroundColor: colors.error + '18', borderColor: colors.error + '44' }]}>
+              <Icon name="bell-off-outline" size={20} color={colors.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.globalPermTitle, { color: colors.error }]}>Notifications are blocked</Text>
+                <Text style={[styles.globalPermDesc, { color: colors.textSecondary }]}>
+                  Alarms and timers cannot show full-screen screens or alert banners without notification permission.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.globalPermBtn, { backgroundColor: colors.error }]}
+                onPress={async () => {
+                  const granted = await requestNotificationPermission();
+                  if (!granted) await openNotificationSettings();
+                  refreshPermissions();
+                }}>
+                <Text style={styles.globalPermBtnText}>Enable</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {permStatus.notifications && !permStatus.fullScreenIntent && (
+            <View style={[styles.globalPermBanner, { backgroundColor: colors.warning + '18', borderColor: colors.warning + '44' }]}>
+              <Icon name="cellphone-sound" size={20} color={colors.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.globalPermTitle, { color: colors.warning }]}>Full-Screen Alarm Access Off</Text>
+                <Text style={[styles.globalPermDesc, { color: colors.textSecondary }]}>
+                  Alarms & timers need special app access to show over the lock screen on Android 14+.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.globalPermBtn, { backgroundColor: colors.warning }]}
+                onPress={async () => {
+                  await openFullScreenIntentSettings();
+                  refreshPermissions();
+                }}>
+                <Text style={[styles.globalPermBtnText, { color: '#000' }]}>Fix</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {permStatus.notifications && !permStatus.exactAlarm && (
+            <View style={[styles.globalPermBanner, { backgroundColor: colors.warning + '18', borderColor: colors.warning + '44' }]}>
+              <Icon name="alarm-check" size={20} color={colors.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.globalPermTitle, { color: colors.warning }]}>Exact Alarm Permission Missing</Text>
+                <Text style={[styles.globalPermDesc, { color: colors.textSecondary }]}>
+                  Android needs exact alarm permission so alarms and timers ring at the precise second.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.globalPermBtn, { backgroundColor: colors.warning }]}
+                onPress={async () => {
+                  await openExactAlarmSettings();
+                  refreshPermissions();
+                }}>
+                <Text style={[styles.globalPermBtnText, { color: '#000' }]}>Fix</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
+
       {activeTab === 'clock' && <ClockTabView colors={colors} use24Hour={use24Hour} isDark={isDark} />}
       {activeTab === 'stopwatch' && <StopwatchTabView colors={colors} isDark={isDark} />}
-      {activeTab === 'timer' && <TimerTabView colors={colors} isDark={isDark} />}
-      {activeTab === 'alarms' && <AlarmsTabView colors={colors} use24Hour={use24Hour} />}
+      {activeTab === 'timer' && (
+        <TimerTabView
+          colors={colors}
+          isDark={isDark}
+          permStatus={permStatus}
+          refreshPermissions={refreshPermissions}
+        />
+      )}
+      {activeTab === 'alarms' && (
+        <AlarmsTabView
+          colors={colors}
+          use24Hour={use24Hour}
+          permStatus={permStatus}
+          refreshPermissions={refreshPermissions}
+        />
+      )}
     </View>
   );
 }
@@ -236,7 +330,17 @@ const TIMER_PRESETS = [
 
 import { TextInput } from 'react-native';
 
-function TimerTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
+function TimerTabView({
+  colors,
+  isDark,
+  permStatus,
+  refreshPermissions,
+}: {
+  colors: any;
+  isDark: boolean;
+  permStatus: PermissionsStatus | null;
+  refreshPermissions: () => void;
+}) {
   const { status, remaining, progress, start, pause, resume, reset } = useTimer();
   const [inputMins, setInputMins] = useState('05');
   const [inputSecs, setInputSecs] = useState('00');
@@ -284,6 +388,27 @@ function TimerTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
     const total = (mins * 60 + secs) * 1000;
     if (total === 0) { Alert.alert('Set Duration', 'Please set a timer duration first.'); return; }
     const label = timerLabel.trim() || (mins > 0 ? `${mins}m${secs > 0 ? ` ${secs}s` : ''}` : `${secs}s`) + ' timer';
+
+    if (permStatus && !permStatus.notifications) {
+      Alert.alert(
+        'Enable Notifications for Timer',
+        'Android requires notification permission to sound the timer alert and show full-screen screens when time is up.',
+        [
+          { text: 'Start Anyway', onPress: () => start(total, label) },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) await openNotificationSettings();
+              refreshPermissions();
+              start(total, label);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     start(total, label);
   }
 
@@ -292,6 +417,27 @@ function TimerTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
     const secs = Math.floor((ms % 60000) / 1000);
     setInputMins(String(mins).padStart(2, '0'));
     setInputSecs(String(secs).padStart(2, '0'));
+
+    if (permStatus && !permStatus.notifications) {
+      Alert.alert(
+        'Enable Notifications for Timer',
+        'Android requires notification permission to sound the timer alert and show full-screen screens when time is up.',
+        [
+          { text: 'Start Anyway', onPress: () => start(ms, `${label} timer`) },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) await openNotificationSettings();
+              refreshPermissions();
+              start(ms, `${label} timer`);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     start(ms, `${label} timer`);
   }
 
@@ -438,7 +584,17 @@ function TimerTabView({ colors, isDark }: { colors: any; isDark: boolean }) {
 // ALARMS TAB
 // ══════════════════════════════════════════════════════════════════════════════
 
-function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean }) {
+function AlarmsTabView({
+  colors,
+  use24Hour,
+  permStatus,
+  refreshPermissions,
+}: {
+  colors: any;
+  use24Hour: boolean;
+  permStatus: PermissionsStatus | null;
+  refreshPermissions: () => void;
+}) {
   const nav = useNavigation<Nav>();
   const { alarms, loading, toggleAlarm, removeAlarm, loadAll } = useAlarms();
   const [deleteTarget, setDeleteTarget] = useState<Alarm | null>(null);
@@ -446,9 +602,35 @@ function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean 
 
   // Refresh when screen focuses (after edit/create)
   useEffect(() => {
-    const unsubscribe = nav.addListener('focus', loadAll);
+    const unsubscribe = nav.addListener('focus', () => {
+      loadAll();
+      refreshPermissions();
+    });
     return unsubscribe;
-  }, [nav, loadAll]);
+  }, [nav, loadAll, refreshPermissions]);
+
+  async function handleToggleAlarm(alarm: Alarm) {
+    if (!alarm.enabled && permStatus && !permStatus.notifications) {
+      Alert.alert(
+        'Enable Notifications for Alarm',
+        'Notification permission is needed to show the alarm screen and ringing notification over the lock screen.',
+        [
+          { text: 'Enable Later', onPress: () => toggleAlarm(alarm) },
+          {
+            text: 'Enable Now',
+            onPress: async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) await openNotificationSettings();
+              refreshPermissions();
+              toggleAlarm(alarm);
+            },
+          },
+        ]
+      );
+      return;
+    }
+    toggleAlarm(alarm);
+  }
 
   function formatAlarmTime(alarm: Alarm): string {
     const date = new Date();
@@ -553,7 +735,7 @@ function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean 
               {/* Toggle switch */}
               <Switch
                 value={alarm.enabled}
-                onValueChange={() => toggleAlarm(alarm)}
+                onValueChange={() => handleToggleAlarm(alarm)}
                 trackColor={{ false: colors.border, true: colors.primary + '88' }}
                 thumbColor={alarm.enabled ? colors.primary : colors.textMuted}
               />
@@ -586,6 +768,38 @@ function AlarmsTabView({ colors, use24Hour }: { colors: any; use24Hour: boolean 
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+
+  // Global permission banners
+  globalPermBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+    marginHorizontal: SPACING[4],
+    marginBottom: SPACING[2],
+    padding: SPACING[3],
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  globalPermTitle: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+  },
+  globalPermDesc: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  globalPermBtn: {
+    paddingHorizontal: SPACING[3],
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    alignSelf: 'center',
+  },
+  globalPermBtnText: {
+    color: '#FFF',
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+  },
 
   // Tab bar
   tabBar: {

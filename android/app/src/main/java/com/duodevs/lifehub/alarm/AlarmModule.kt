@@ -1,16 +1,24 @@
 package com.duodevs.lifehub.alarm
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.*
+import com.facebook.react.modules.core.PermissionAwareActivity
+import com.facebook.react.modules.core.PermissionListener
 import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -283,6 +291,122 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
     // ══════════════════════════════════════════════════════════════════════════
 
     /**
+     * Check all alarm and timer related permissions in one call.
+     * Returns a map with booleans for notifications, exactAlarm, fullScreenIntent, overlay, batteryOptimization.
+     */
+    @ReactMethod
+    fun checkAllPermissions(promise: Promise) {
+        try {
+            val map = Arguments.createMap()
+
+            // 1. Notifications
+            val notifEnabled = NotificationManagerCompat.from(reactContext).areNotificationsEnabled()
+            map.putBoolean("notifications", notifEnabled)
+
+            // 2. Exact alarm (API 31+)
+            val exactAlarm = AlarmScheduler.canScheduleExactAlarms(reactContext)
+            map.putBoolean("exactAlarm", exactAlarm)
+
+            // 3. Full-screen intent (API 34+)
+            val fullScreen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val nm = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.canUseFullScreenIntent()
+            } else {
+                true
+            }
+            map.putBoolean("fullScreenIntent", fullScreen)
+
+            // 4. Overlay (Display over other apps - API 23+)
+            val overlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.canDrawOverlays(reactContext)
+            } else {
+                true
+            }
+            map.putBoolean("overlay", overlay)
+
+            // 5. Battery optimization exemption (API 23+)
+            val battery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = reactContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                pm.isIgnoringBatteryOptimizations(reactContext.packageName)
+            } else {
+                true
+            }
+            map.putBoolean("batteryOptimization", battery)
+
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("CHECK_PERMISSIONS_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Check if notifications are enabled for this app.
+     */
+    @ReactMethod
+    fun checkNotificationPermission(promise: Promise) {
+        promise.resolve(NotificationManagerCompat.from(reactContext).areNotificationsEnabled())
+    }
+
+    /**
+     * Request notification permission on Android 13+ (API 33+),
+     * or check if enabled on older versions.
+     */
+    @ReactMethod
+    fun requestNotificationPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val perm = Manifest.permission.POST_NOTIFICATIONS
+                if (ContextCompat.checkSelfPermission(reactContext, perm) == PackageManager.PERMISSION_GRANTED) {
+                    promise.resolve(true)
+                    return
+                }
+                val activity = reactContext.currentActivity as? PermissionAwareActivity
+                if (activity != null) {
+                    activity.requestPermissions(
+                        arrayOf(perm),
+                        1001,
+                        PermissionListener { _, _, grantResults ->
+                            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                            promise.resolve(granted)
+                            true
+                        }
+                    )
+                } else {
+                    // Fallback to opening settings
+                    openNotificationSettings(promise)
+                }
+            } else {
+                promise.resolve(NotificationManagerCompat.from(reactContext).areNotificationsEnabled())
+            }
+        } catch (e: Exception) {
+            promise.reject("NOTIF_PERM_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Open system notification settings for this app.
+     */
+    @ReactMethod
+    fun openNotificationSettings(promise: Promise) {
+        try {
+            val intent = Intent().apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    putExtra(Settings.EXTRA_APP_PACKAGE, reactContext.packageName)
+                } else {
+                    action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                    data = Uri.parse("package:${reactContext.packageName}")
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            reactContext.startActivity(intent)
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SETTINGS_ERROR", e.message, e)
+        }
+    }
+
+    /**
      * Check if the app can schedule exact alarms (Android 12+).
      * Returns true if permission is granted or API < 31.
      */
@@ -293,7 +417,6 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
 
     /**
      * Open system settings for exact alarm permission (Android 12+).
-     * On older versions, this is a no-op.
      */
     @ReactMethod
     fun openExactAlarmSettings(promise: Promise) {
@@ -313,7 +436,6 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
 
     /**
      * Check if the app has USE_FULL_SCREEN_INTENT permission (Android 14+).
-     * Below Android 14, full screen intents are permitted by default.
      */
     @ReactMethod
     fun checkFullScreenIntentPermission(promise: Promise) {
@@ -345,6 +467,80 @@ class AlarmModule(private val reactContext: ReactApplicationContext) :
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("SETTINGS_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Check if the app has "Display over other apps" (SYSTEM_ALERT_WINDOW) permission.
+     */
+    @ReactMethod
+    fun checkOverlayPermission(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            promise.resolve(Settings.canDrawOverlays(reactContext))
+        } else {
+            promise.resolve(true)
+        }
+    }
+
+    /**
+     * Open system settings for "Display over other apps".
+     */
+    @ReactMethod
+    fun openOverlaySettings(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${reactContext.packageName}")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SETTINGS_ERROR", e.message, e)
+        }
+    }
+
+    /**
+     * Check if app is whitelisted from battery optimizations.
+     */
+    @ReactMethod
+    fun checkBatteryOptimization(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = reactContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+            promise.resolve(pm.isIgnoringBatteryOptimizations(reactContext.packageName))
+        } else {
+            promise.resolve(true)
+        }
+    }
+
+    /**
+     * Request battery optimization ignore prompt.
+     */
+    @SuppressLint("BatteryLife")
+    @ReactMethod
+    fun requestIgnoreBatteryOptimization(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${reactContext.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+                promise.resolve(null)
+            } catch (e2: Exception) {
+                promise.reject("BATTERY_ERROR", e2.message, e2)
+            }
         }
     }
 

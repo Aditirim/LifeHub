@@ -25,24 +25,36 @@ import {
   checkExactAlarmPermission,
   checkFullScreenIntentPermission,
   openFullScreenIntentSettings,
+  checkAllPermissions,
+  requestNotificationPermission,
+  openNotificationSettings,
+  openOverlaySettings,
+  requestIgnoreBatteryOptimization,
+  PermissionsStatus,
 } from '../../native/AlarmModule';
+import { useNavigation } from '@react-navigation/native';
 
 const SETTINGS_KEY = '@lifehub_alarm_settings';
 
 export default function AlarmSettingsScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const [settings, setSettings] = useState<AlarmSettings>(DEFAULT_ALARM_SETTINGS);
-  const [hasExactPerm, setHasExactPerm] = useState<boolean | null>(null);
-  const [hasFullScreenPerm, setHasFullScreenPerm] = useState<boolean | null>(null);
+  const [perms, setPerms] = useState<PermissionsStatus | null>(null);
+
+  const loadPerms = React.useCallback(() => {
+    checkAllPermissions().then(setPerms).catch(() => {});
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(SETTINGS_KEY).then(raw => {
       if (raw) setSettings({ ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(raw) });
     }).catch(() => {});
 
-    checkExactAlarmPermission().then(setHasExactPerm).catch(() => setHasExactPerm(true));
-    checkFullScreenIntentPermission().then(setHasFullScreenPerm).catch(() => setHasFullScreenPerm(true));
-  }, []);
+    loadPerms();
+    const unsub = navigation.addListener('focus', loadPerms);
+    return unsub;
+  }, [navigation, loadPerms]);
 
   async function update(patch: Partial<AlarmSettings>) {
     const updated = { ...settings, ...patch };
@@ -62,29 +74,159 @@ export default function AlarmSettingsScreen() {
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.scroll}>
 
-      {/* Exact alarm permission banner */}
-      {hasExactPerm === false && (
-        <TouchableOpacity
-          onPress={() => openExactAlarmSettings()}
-          style={[styles.permBanner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
-          <Icon name="alert-circle-outline" size={20} color={colors.warning} />
-          <Text style={[styles.permText, { color: colors.warning }]}>
-            Exact alarm permission not granted. Tap to open Settings.
-          </Text>
-        </TouchableOpacity>
-      )}
+      {/* ── System Permissions ───────────────────────────────────── */}
+      <SectionHeader title="Permissions & System Access" colors={colors} />
 
-      {/* Full-screen intent permission banner (Android 14+) */}
-      {hasFullScreenPerm === false && (
-        <TouchableOpacity
-          onPress={() => openFullScreenIntentSettings()}
-          style={[styles.permBanner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
-          <Icon name="cellphone-sound" size={20} color={colors.warning} />
-          <Text style={[styles.permText, { color: colors.warning }]}>
-            Full-screen alarm access not granted. Tap to allow full-screen alarms over lock screen.
-          </Text>
-        </TouchableOpacity>
-      )}
+      {/* Notifications */}
+      <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.permCardHeader}>
+          <Icon
+            name={perms?.notifications ? 'bell-check' : 'bell-off'}
+            size={22}
+            color={perms?.notifications ? colors.success : colors.error}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.permCardTitle, { color: colors.text }]}>Notification Alerts</Text>
+            <Text style={[styles.permCardDesc, { color: colors.textSecondary }]}>
+              Required to sound alarms, show heads-up banners, and display lock screen alerts.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permStatusBadge,
+              { backgroundColor: perms?.notifications ? colors.success + '22' : colors.error + '22' },
+            ]}
+            onPress={async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) await openNotificationSettings();
+              loadPerms();
+            }}>
+            <Text style={[styles.permBadgeText, { color: perms?.notifications ? colors.success : colors.error }]}>
+              {perms?.notifications ? 'Granted ✓' : 'Enable'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Exact Alarms */}
+      <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.permCardHeader}>
+          <Icon
+            name={perms?.exactAlarm ? 'alarm-check' : 'alarm'}
+            size={22}
+            color={perms?.exactAlarm ? colors.success : colors.warning}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.permCardTitle, { color: colors.text }]}>Exact Alarm Timing</Text>
+            <Text style={[styles.permCardDesc, { color: colors.textSecondary }]}>
+              Ensures alarms ring at the exact second even in power-saving Doze mode.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permStatusBadge,
+              { backgroundColor: perms?.exactAlarm ? colors.success + '22' : colors.warning + '22' },
+            ]}
+            onPress={async () => {
+              await openExactAlarmSettings();
+              loadPerms();
+            }}>
+            <Text style={[styles.permBadgeText, { color: perms?.exactAlarm ? colors.success : colors.warning }]}>
+              {perms?.exactAlarm ? 'Granted ✓' : 'Enable'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Full Screen Intent (Android 14+) */}
+      <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.permCardHeader}>
+          <Icon
+            name={perms?.fullScreenIntent ? 'cellphone-sound' : 'cellphone-off'}
+            size={22}
+            color={perms?.fullScreenIntent ? colors.success : colors.warning}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.permCardTitle, { color: colors.text }]}>Full-Screen Lock Screen Alerts</Text>
+            <Text style={[styles.permCardDesc, { color: colors.textSecondary }]}>
+              Allows full-screen alarm ringing activity over the lock screen (Android 14+).
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permStatusBadge,
+              { backgroundColor: perms?.fullScreenIntent ? colors.success + '22' : colors.warning + '22' },
+            ]}
+            onPress={async () => {
+              await openFullScreenIntentSettings();
+              loadPerms();
+            }}>
+            <Text style={[styles.permBadgeText, { color: perms?.fullScreenIntent ? colors.success : colors.warning }]}>
+              {perms?.fullScreenIntent ? 'Granted ✓' : 'Enable'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Display Over Other Apps */}
+      <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.permCardHeader}>
+          <Icon
+            name={perms?.overlay ? 'layers-triple-outline' : 'layers-off-outline'}
+            size={22}
+            color={perms?.overlay ? colors.success : colors.textMuted}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.permCardTitle, { color: colors.text }]}>Display Over Other Apps</Text>
+            <Text style={[styles.permCardDesc, { color: colors.textSecondary }]}>
+              Allows immediate full-screen popups even while using other applications.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permStatusBadge,
+              { backgroundColor: perms?.overlay ? colors.success + '22' : colors.primary + '22' },
+            ]}
+            onPress={async () => {
+              await openOverlaySettings();
+              loadPerms();
+            }}>
+            <Text style={[styles.permBadgeText, { color: perms?.overlay ? colors.success : colors.primary }]}>
+              {perms?.overlay ? 'Granted ✓' : 'Allow'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Battery Optimization */}
+      <View style={[styles.permCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.permCardHeader}>
+          <Icon
+            name={perms?.batteryOptimization ? 'battery-check-outline' : 'battery-alert-outline'}
+            size={22}
+            color={perms?.batteryOptimization ? colors.success : colors.textMuted}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.permCardTitle, { color: colors.text }]}>Battery Optimization Exemption</Text>
+            <Text style={[styles.permCardDesc, { color: colors.textSecondary }]}>
+              Prevents Android power managers from killing active alarms or timers.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.permStatusBadge,
+              { backgroundColor: perms?.batteryOptimization ? colors.success + '22' : colors.primary + '22' },
+            ]}
+            onPress={async () => {
+              await requestIgnoreBatteryOptimization();
+              loadPerms();
+            }}>
+            <Text style={[styles.permBadgeText, { color: perms?.batteryOptimization ? colors.success : colors.primary }]}>
+              {perms?.batteryOptimization ? 'Unrestricted ✓' : 'Whitelist'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* ── Clock Display ───────────────────────────────────────── */}
       <SectionHeader title="Clock Display" colors={colors} />
@@ -214,7 +356,7 @@ export default function AlarmSettingsScreen() {
         <Text style={[styles.actionText, { color: colors.text }]}>Reschedule all alarms</Text>
       </TouchableOpacity>
 
-      {hasExactPerm === false && (
+      {perms?.exactAlarm === false && (
         <TouchableOpacity
           onPress={() => openExactAlarmSettings()}
           style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.warning }]}>
@@ -288,4 +430,36 @@ const styles = StyleSheet.create({
   actionText: { fontSize: FONT_SIZE.base },
 
   note: { fontSize: FONT_SIZE.xs, lineHeight: 18, marginTop: SPACING[4] },
+
+  // Permission card styles
+  permCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING[4],
+    marginBottom: SPACING[3],
+  },
+  permCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING[3],
+  },
+  permCardTitle: {
+    fontSize: FONT_SIZE.base,
+    fontWeight: '700',
+  },
+  permCardDesc: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  permStatusBadge: {
+    paddingHorizontal: SPACING[3],
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    alignSelf: 'center',
+  },
+  permBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
+  },
 });

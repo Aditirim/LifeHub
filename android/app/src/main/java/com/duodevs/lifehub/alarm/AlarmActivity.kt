@@ -73,11 +73,10 @@ class AlarmActivity : Activity() {
     // ── Activity lifecycle ─────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        extractIntentData(intent)
-
-        // Configure window to show over lock screen and wake the device
         setupWindowFlags()
+        super.onCreate(savedInstanceState)
+        this.volumeControlStream = android.media.AudioManager.STREAM_ALARM
+        extractIntentData(intent)
 
         // Build and show the UI
         setContentView(buildLayout())
@@ -96,10 +95,10 @@ class AlarmActivity : Activity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        setupWindowFlags()
         super.onNewIntent(intent)
         setIntent(intent)
         extractIntentData(intent)
-        setupWindowFlags()
         setContentView(buildLayout())
     }
 
@@ -119,12 +118,15 @@ class AlarmActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
+            val km = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            km?.requestDismissKeyguard(this, null)
         }
         @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
     }

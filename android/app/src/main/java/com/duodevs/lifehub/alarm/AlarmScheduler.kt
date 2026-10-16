@@ -46,7 +46,7 @@ object AlarmScheduler {
      */
     @SuppressLint("MissingPermission")
     fun schedule(context: Context, alarm: AlarmData, fireAtMs: Long? = null) {
-        AlarmService.createChannel(context)
+        AlarmService.createChannels(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val triggerMs    = fireAtMs ?: alarm.nextFireTimestamp()
 
@@ -110,6 +110,7 @@ object AlarmScheduler {
      */
     @SuppressLint("MissingPermission")
     fun scheduleTimer(context: Context, timerId: String, label: String, durationMs: Long) {
+        AlarmService.createChannels(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val triggerMs    = System.currentTimeMillis() + durationMs
 

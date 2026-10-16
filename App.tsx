@@ -20,14 +20,15 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { initNotifications } from './src/services/notificationService';
+import { requestNotificationPermission } from './src/native/AlarmModule';
 
 function App(): React.JSX.Element {
   // Initialize notification channels and FCM listeners when the app starts.
-  // This runs once and sets up everything notifications need.
+  // Also proactively request notification permission on Android 13+ (API 33+)
+  // so alarms and timers can show full-screen and heads-up notifications.
   useEffect(() => {
-    initNotifications().catch(() => {
-      // Notification init failure is non-critical — app still works
-    });
+    initNotifications().catch(() => {});
+    requestNotificationPermission().catch(() => {});
   }, []);
 
   return (

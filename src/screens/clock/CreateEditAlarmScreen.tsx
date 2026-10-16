@@ -33,6 +33,7 @@ import {
   AlarmInput, BUILTIN_RINGTONES, RingtoneType,
   WEEKDAYS, WEEKENDS, EVERY_DAY, DAY_LABELS,
   previewRingtone, stopRingtonePreview,
+  checkNotificationPermission, requestNotificationPermission, openNotificationSettings,
 } from '../../native/AlarmModule';
 import { useAlarms } from '../../hooks/useAlarms';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -137,6 +138,31 @@ export default function CreateEditAlarmScreen() {
       gradualVolumeDuration: gradualDuration,
     } as AlarmInput;
 
+    // Check if notification permission is granted
+    const notifsAllowed = await checkNotificationPermission();
+    if (!notifsAllowed) {
+      Alert.alert(
+        'Enable Notifications for Alarm',
+        'Notification permission is needed to show the alarm screen and ringing alert when your alarm goes off.',
+        [
+          { text: 'Save Anyway', onPress: () => proceedSave(input, h, m) },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) await openNotificationSettings();
+              proceedSave(input, h, m);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    proceedSave(input, h, m);
+  }
+
+  async function proceedSave(input: AlarmInput, h: number, m: number) {
     setSaving(true);
     try {
       await stopRingtonePreview().catch(() => {});

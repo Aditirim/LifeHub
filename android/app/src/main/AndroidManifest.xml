@@ -71,6 +71,18 @@
     -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+    <!--
+      SYSTEM_ALERT_WINDOW — Allows showing AlarmActivity directly over any app or lock screen
+      when an alarm or timer goes off.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- DISABLE_KEYGUARD — Allows waking device past keyguard on lockscreen -->
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+
+    <!-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS — Ensures alarms & timers are not delayed by Doze -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -98,7 +110,8 @@
         AlarmActivity — full-screen native alarm & timer UI shown over the lock screen.
         showWhenLocked: displays above lock screen / keyguard (API 27+).
         turnScreenOn: turns screen on when launched (API 27+).
-        exported=false: only started by our own PendingIntents.
+        showOnLockScreen / inheritShowWhenLocked: OEM compatibility (Xiaomi/MIUI, Samsung, Huawei).
+        exported=false: only started by our own PendingIntents / direct intents.
       -->
       <activity
         android:name=".alarm.AlarmActivity"
@@ -106,6 +119,8 @@
         android:excludeFromRecents="true"
         android:showWhenLocked="true"
         android:turnScreenOn="true"
+        android:showOnLockScreen="true"
+        android:inheritShowWhenLocked="true"
         android:taskAffinity="${applicationId}.alarm"
         android:launchMode="singleTask" />
 

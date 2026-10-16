@@ -9,9 +9,17 @@
  * On non-Android platforms (iOS, web preview), all functions no-op gracefully.
  */
 
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface PermissionsStatus {
+  notifications: boolean;
+  exactAlarm: boolean;
+  fullScreenIntent: boolean;
+  overlay: boolean;
+  batteryOptimization: boolean;
+}
 
 export type RingtoneType = 'builtin' | 'device' | 'default';
 
@@ -199,6 +207,73 @@ export async function stopTimer(): Promise<void> {
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 /**
+ * Check all 5 critical alarm/timer permissions at once.
+ */
+export async function checkAllPermissions(): Promise<PermissionsStatus> {
+  const fallback: PermissionsStatus = {
+    notifications: true,
+    exactAlarm: true,
+    fullScreenIntent: true,
+    overlay: true,
+    batteryOptimization: true,
+  };
+  if (!isAvailable()) return fallback;
+  try {
+    return await NativeAlarmModule.checkAllPermissions();
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Check if notifications are enabled for LifeHub.
+ */
+export async function checkNotificationPermission(): Promise<boolean> {
+  if (!isAvailable()) return true;
+  try {
+    return await NativeAlarmModule.checkNotificationPermission();
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Request notification permission from the user.
+ * On Android 13+ (API 33+), shows the native system dialog.
+ */
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  try {
+    if (Platform.Version >= 33) {
+      const result = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        {
+          title: 'Notification Permission',
+          message: 'LifeHub needs notification permission to show alarms and timer alerts on your lock screen.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+      return result === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    if (isAvailable()) {
+      return await NativeAlarmModule.requestNotificationPermission();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open the system app notification settings page.
+ */
+export async function openNotificationSettings(): Promise<void> {
+  if (!isAvailable()) return;
+  await NativeAlarmModule.openNotificationSettings();
+}
+
+/**
  * Check if exact alarm scheduling is permitted.
  * Returns true on API < 31 (no restriction), or if granted on API 31+.
  */
@@ -230,6 +305,38 @@ export async function checkFullScreenIntentPermission(): Promise<boolean> {
 export async function openFullScreenIntentSettings(): Promise<void> {
   if (!isAvailable()) return;
   await NativeAlarmModule.openFullScreenIntentSettings();
+}
+
+/**
+ * Check if "Display over other apps" (SYSTEM_ALERT_WINDOW) is granted.
+ */
+export async function checkOverlayPermission(): Promise<boolean> {
+  if (!isAvailable()) return true;
+  return NativeAlarmModule.checkOverlayPermission();
+}
+
+/**
+ * Open system settings for "Display over other apps".
+ */
+export async function openOverlaySettings(): Promise<void> {
+  if (!isAvailable()) return;
+  await NativeAlarmModule.openOverlaySettings();
+}
+
+/**
+ * Check if app is whitelisted from battery optimizations.
+ */
+export async function checkBatteryOptimization(): Promise<boolean> {
+  if (!isAvailable()) return true;
+  return NativeAlarmModule.checkBatteryOptimization();
+}
+
+/**
+ * Request battery optimization ignore prompt.
+ */
+export async function requestIgnoreBatteryOptimization(): Promise<void> {
+  if (!isAvailable()) return;
+  await NativeAlarmModule.requestIgnoreBatteryOptimization();
 }
 
 // ── Ringtone preview ──────────────────────────────────────────────────────────

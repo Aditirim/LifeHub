@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.duodevs.lifehub.R
@@ -18,12 +19,14 @@ import com.duodevs.lifehub.alarm.AlarmData.Companion.nextFireTimestamp
  *
  * Flow:
  *  1. AlarmManager wakes device and triggers onReceive(ACTION_ALARM_FIRE)
- *  2. Loads AlarmData from storage
- *  3. Starts AlarmService (audio loop + vibration in foreground)
- *  4. Fallback: if Android restricts foreground service start (e.g. FGS restrictions),
+ *  2. Wakes screen using PowerManager ACQUIRE_CAUSES_WAKEUP
+ *  3. Loads AlarmData from storage
+ *  4. Starts AlarmService (audio loop + vibration in foreground)
+ *  5. Attempts direct launch of AlarmActivity
+ *  6. Fallback: if Android restricts foreground service start,
  *     posts an immediate high-importance notification with full-screen intent directly.
- *  5. Reschedules repeating alarms or disables one-time alarms.
- *  6. Handles ACTION_STOP_ALARM and ACTION_SNOOZE_ALARM broadcasts from notification actions.
+ *  7. Reschedules repeating alarms or disables one-time alarms.
+ *  8. Handles ACTION_STOP_ALARM and ACTION_SNOOZE_ALARM broadcasts from notification actions.
  */
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -68,7 +71,13 @@ class AlarmReceiver : BroadcastReceiver() {
             return
         }
 
-        // 1. Start the foreground service that plays the ringtone
+        // 1. Physically turn on the screen
+        wakeScreen(context)
+
+        // 2. Ensure notification channels exist
+        AlarmService.createChannels(context)
+
+        // 3. Start the foreground service that plays the ringtone & posts notification
         val serviceIntent = Intent(context, AlarmService::class.java).apply {
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId)
         }
@@ -79,12 +88,14 @@ class AlarmReceiver : BroadcastReceiver() {
                 context.startService(serviceIntent)
             }
         } catch (e: Exception) {
-            // ForegroundServiceStartNotAllowedException or SecurityException
-            Log.e(TAG, "Could not start AlarmService directly (${e.message}). Showing fallback notification with full-screen intent.", e)
+            Log.e(TAG, "Could not start AlarmService directly (${e.message}). Showing fallback notification.", e)
             showFallbackAlarmNotification(context, alarm)
         }
 
-        // 2. Handle repeating vs one-time
+        // 4. Attempt direct activity launch
+        tryDirectActivityLaunch(context, alarmId)
+
+        // 5. Handle repeating vs one-time
         if (alarm.repeatDays.isNotEmpty()) {
             val nextFire = alarm.nextFireTimestamp(System.currentTimeMillis() + 60_000L)
             AlarmScheduler.schedule(context, alarm, nextFire)
@@ -95,13 +106,47 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun wakeScreen(context: Context) {
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            @Suppress("DEPRECATION")
+            val screenLock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                "lifehub:AlarmScreenTurnOn"
+            )
+            screenLock.acquire(3000L)
+        } catch (e: Exception) {
+            Log.w(TAG, "Screen wake-lock error: ${e.message}")
+        }
+    }
+
+    private fun tryDirectActivityLaunch(context: Context, alarmId: String) {
+        try {
+            val activityIntent = Intent(context, AlarmActivity::class.java).apply {
+                action = "com.duodevs.lifehub.ALARM_DIRECT_${alarmId}"
+                data = Uri.parse("lifehub://alarm/direct/${alarmId}")
+                putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            context.startActivity(activityIntent)
+            Log.d(TAG, "Direct launch startActivity called for alarm $alarmId")
+        } catch (e: Exception) {
+            Log.d(TAG, "Direct launch suppressed: ${e.message}")
+        }
+    }
+
     private fun handleStop(context: Context, intent: Intent) {
         val alarmId = intent.getStringExtra(AlarmScheduler.EXTRA_ALARM_ID)
         Log.d(TAG, "Handling Stop for alarm: $alarmId")
 
         // Stop foreground service
         try {
-            context.stopService(Intent(context, AlarmService::class.java))
+            val stopIntent = Intent(context, AlarmService::class.java).apply {
+                action = AlarmService.ACTION_STOP_ALARM
+            }
+            context.startService(stopIntent)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping AlarmService: ${e.message}")
         }
@@ -130,7 +175,10 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Stop foreground service
         try {
-            context.stopService(Intent(context, AlarmService::class.java))
+            val stopIntent = Intent(context, AlarmService::class.java).apply {
+                action = AlarmService.ACTION_STOP_ALARM
+            }
+            context.startService(stopIntent)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping AlarmService: ${e.message}")
         }
@@ -169,7 +217,7 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     private fun showFallbackAlarmNotification(context: Context, alarm: AlarmData) {
-        AlarmService.createChannel(context)
+        AlarmService.createChannels(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val notifId = AlarmService.notifIdForAlarm(alarm.id)
@@ -178,6 +226,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Stop action
         val stopIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = AlarmService.ACTION_STOP_ALARM
+            data = Uri.parse("lifehub://alarm/stop/${alarm.id}")
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
             `package` = context.packageName
         }
@@ -189,6 +238,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Snooze action
         val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = AlarmService.ACTION_SNOOZE_ALARM
+            data = Uri.parse("lifehub://alarm/snooze/${alarm.id}")
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
             `package` = context.packageName
         }
@@ -200,7 +250,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Tap
         val tapIntent = Intent(context, AlarmActivity::class.java).apply {
             action = "com.duodevs.lifehub.ALARM_TAP_${alarm.id}"
-            data = Uri.parse("lifehub://alarm/${alarm.id}")
+            data = Uri.parse("lifehub://alarm/tap/${alarm.id}")
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -214,7 +264,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Full-screen intent
         val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
             action = "com.duodevs.lifehub.ALARM_FULL_SCREEN_${alarm.id}"
-            data = Uri.parse("lifehub://alarm/${alarm.id}")
+            data = Uri.parse("lifehub://alarm/fullscreen/${alarm.id}")
             putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarm.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -227,7 +277,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val timeStr = String.format("%02d:%02d", alarm.hour, alarm.minute)
 
-        val notification = NotificationCompat.Builder(context, AlarmService.CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, AlarmService.CHANNEL_ID_ALARM)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("⏰ ${alarm.label}")
             .setContentText(timeStr)
